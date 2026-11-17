@@ -7,6 +7,7 @@ actual pipeline. Output is deterministic (fixed data, fixed PDF metadata, seeded
 Usage:
     python scripts/generate_demo_data.py [--output-dir sample_data]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -22,22 +23,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import pymupdf  # noqa: E402
-from PIL import Image, ImageFilter  # noqa: E402
-from reportlab.lib import colors  # noqa: E402
-from reportlab.lib.pagesizes import A4  # noqa: E402
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet  # noqa: E402
-from reportlab.lib.units import mm  # noqa: E402
-from reportlab.lib.utils import ImageReader  # noqa: E402
-from reportlab.pdfgen import canvas  # noqa: E402
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle  # noqa: E402
+import pymupdf
+from PIL import Image, ImageFilter
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen import canvas
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 CENT = Decimal("0.01")
 BILL_TO = ("Contoso Manufacturing Inc.", "400 Industrial Way", "Dayton, OH 45402", "Accounts Payable")
 
 
-def money(value: Decimal) -> str:
-    return f"${value:,.2f}"
+CURRENCY_SYMBOLS = {"USD": "$", "EUR": "€", "GBP": "£"}
+
+
+def money(value: Decimal, currency: str = "USD") -> str:
+    return f"{CURRENCY_SYMBOLS[currency]}{value:,.2f}"
 
 
 def q(value: Decimal) -> Decimal:
@@ -73,6 +77,8 @@ class PurchaseOrder:
     issue_date: date
     lines: tuple[Line, ...]
     currency: str = "USD"
+    tolerance_percent: Decimal = Decimal("2.00")  # allowed invoice-vs-PO variance
+    status: str = "OPEN"  # OPEN | CLOSED
 
     @property
     def total(self) -> Decimal:
@@ -83,10 +89,11 @@ class PurchaseOrder:
             "po_number": self.po_number,
             "vendor": {"name": self.vendor.name, "address": list(self.vendor.address), "tax_id": self.vendor.tax_id},
             "currency": self.currency,
+            "tolerance_percent": str(self.tolerance_percent),
+            "status": self.status,
             "issue_date": self.issue_date.isoformat(),
             "lines": [
-                {"line_no": i, "sku": ln.sku, "description": ln.description,
-                 "quantity": str(ln.quantity), "unit_price": str(ln.unit_price)}
+                {"line_no": i, "sku": ln.sku, "description": ln.description, "quantity": str(ln.quantity), "unit_price": str(ln.unit_price)}
                 for i, ln in enumerate(self.lines, 1)
             ],
             "total": str(self.total),
@@ -104,6 +111,7 @@ class Invoice:
     taxes: tuple[tuple[str, Decimal], ...]  # (label, rate) applied to the subtotal
     scanned: bool = False
     notes: str = ""
+    currency: str = "USD"
 
     @property
     def subtotal(self) -> Decimal:
@@ -130,35 +138,65 @@ class GeneratedInvoice:
     total: Decimal
     scanned: bool
     tax_labels: list[str] = field(default_factory=list)
+    currency: str = "USD"
 
 
 ACME = Vendor("Acme Industrial Supplies Ltd", ("12 Foundry Road", "Pittsburgh, PA 15201"), "US-47-1234567")
 NORTHWIND = Vendor("Northwind Office Co", ("88 Commerce Street", "Columbus, OH 43215"), "US-31-7654321")
 GLOBEX = Vendor("Globex IT Services LLC", ("501 Technology Drive", "Austin, TX 78701"), "US-74-2468135")
 INITECH = Vendor("Initech Facilities Management", ("7 Harbor Plaza", "Cleveland, OH 44114"), "US-34-1357924")
+UMBRELLA = Vendor("Umbrella Logistics GmbH", ("Hafenstrasse 14", "20457 Hamburg, Germany"), "DE-811234567")
+STARK = Vendor("Stark Engineering Components Ltd", ("Unit 9, Forge Park", "Sheffield S9 1AB, United Kingdom"), "GB-203456789")
+WAYNE = Vendor("Wayne Packaging Co", ("2100 Gotham Avenue", "Newark, NJ 07102"), "US-22-8765432")
+HOOLI = Vendor("Hooli Cloud Services Inc", ("1 Infinite Loop Road", "San Jose, CA 95112"), "US-94-5551212")
+SOYLENT = Vendor("Soylent Catering Ltd", ("45 Greenfield Lane", "Manchester M1 4BT, United Kingdom"), "GB-312987654")
+TYRELL = Vendor("Tyrell Laboratory Equipment Inc", ("300 Genome Way", "Boston, MA 02110"), "US-04-7788990")
+VANDELAY = Vendor("Vandelay Import Export S.L.", ("Calle del Comercio 22", "28001 Madrid, Spain"), "ES-B12345678")
+MASSIVE = Vendor("Massive Dynamic Research Corp", ("77 Research Parkway", "Cambridge, MA 02139"), "US-04-1029384")
 
 _OFFICE_ITEMS = [
-    ("NW-PAP-A4", "A4 copy paper, 5-ream carton", "28.40"), ("NW-PEN-BLK", "Ballpoint pens, black, box of 50", "11.75"),
-    ("NW-FLD-LTR", "Manila file folders, box of 100", "14.20"), ("NW-STP-STD", "Heavy-duty stapler", "19.90"),
-    ("NW-TNR-85A", "Toner cartridge 85A, black", "62.35"), ("NW-NTB-SPR", "Spiral notebooks, pack of 10", "16.80"),
-    ("NW-MKR-WHT", "Whiteboard markers, set of 12", "9.45"), ("NW-LBL-AVY", "Address labels, 1000 count", "13.10"),
-    ("NW-ENV-C5", "C5 envelopes, box of 500", "21.60"), ("NW-CLP-BND", "Binder clips, assorted, box of 144", "7.25"),
-    ("NW-DSK-ORG", "Desktop organiser, mesh", "17.95"), ("NW-CAL-WLL", "Wall calendar, 12 month", "8.60"),
-    ("NW-TAP-CLR", "Packing tape, clear, 6-roll", "12.30"), ("NW-SCS-8IN", "Office scissors, 8 inch", "6.40"),
-    ("NW-HLT-YLW", "Highlighters, yellow, box of 12", "8.15"), ("NW-PST-3X3", "Sticky notes 3x3, 12 pads", "10.55"),
-    ("NW-CBL-USB", "USB-C cable, 2 m", "9.99"), ("NW-MOU-WRL", "Wireless mouse", "18.75"),
-    ("NW-KBD-STD", "Standard USB keyboard", "24.50"), ("NW-MON-ARM", "Monitor arm, single", "54.00"),
-    ("NW-CHR-MAT", "Chair mat, 36x48 in", "46.80"), ("NW-LMP-LED", "LED desk lamp", "27.30"),
-    ("NW-SHR-CRS", "Cross-cut shredder, 10 sheet", "89.00"), ("NW-WST-BIN", "Wastebasket, 28 qt", "11.20"),
-    ("NW-FRM-A4", "Certificate frame, A4", "13.85"), ("NW-PNC-HOL", "3-hole punch, 20 sheet", "22.40"),
-    ("NW-RUL-30C", "Ruler, 30 cm", "2.15"), ("NW-ERS-WHT", "Erasers, pack of 20", "4.30"),
-    ("NW-GLU-STK", "Glue sticks, pack of 12", "6.95"), ("NW-TIE-ZIP", "Cable ties, 200 pack", "5.80"),
-    ("NW-BAT-AA", "AA batteries, 24 pack", "15.60"), ("NW-BAT-AAA", "AAA batteries, 24 pack", "14.90"),
-    ("NW-CLN-WIP", "Screen cleaning wipes, 100", "7.70"), ("NW-HDN-PHN", "Headset, USB, mono", "33.25"),
-    ("NW-WBD-90", "Whiteboard 90x60 cm", "58.40"), ("NW-PIN-BRD", "Pin board, cork, 60x45 cm", "26.10"),
-    ("NW-DVD-SLV", "Document wallets, pack of 50", "12.65"), ("NW-LTR-TRY", "Letter tray, 3-tier", "20.95"),
-    ("NW-ROL-BUB", "Bubble wrap roll, 50 m", "31.40"), ("NW-FLS-DRV", "USB flash drive, 64 GB", "8.99"),
-    ("NW-CHR-TLR", "Task chair, ergonomic", "149.00"), ("NW-PRT-LBL", "Label printer ribbon", "18.20"),
+    ("NW-PAP-A4", "A4 copy paper, 5-ream carton", "28.40"),
+    ("NW-PEN-BLK", "Ballpoint pens, black, box of 50", "11.75"),
+    ("NW-FLD-LTR", "Manila file folders, box of 100", "14.20"),
+    ("NW-STP-STD", "Heavy-duty stapler", "19.90"),
+    ("NW-TNR-85A", "Toner cartridge 85A, black", "62.35"),
+    ("NW-NTB-SPR", "Spiral notebooks, pack of 10", "16.80"),
+    ("NW-MKR-WHT", "Whiteboard markers, set of 12", "9.45"),
+    ("NW-LBL-AVY", "Address labels, 1000 count", "13.10"),
+    ("NW-ENV-C5", "C5 envelopes, box of 500", "21.60"),
+    ("NW-CLP-BND", "Binder clips, assorted, box of 144", "7.25"),
+    ("NW-DSK-ORG", "Desktop organiser, mesh", "17.95"),
+    ("NW-CAL-WLL", "Wall calendar, 12 month", "8.60"),
+    ("NW-TAP-CLR", "Packing tape, clear, 6-roll", "12.30"),
+    ("NW-SCS-8IN", "Office scissors, 8 inch", "6.40"),
+    ("NW-HLT-YLW", "Highlighters, yellow, box of 12", "8.15"),
+    ("NW-PST-3X3", "Sticky notes 3x3, 12 pads", "10.55"),
+    ("NW-CBL-USB", "USB-C cable, 2 m", "9.99"),
+    ("NW-MOU-WRL", "Wireless mouse", "18.75"),
+    ("NW-KBD-STD", "Standard USB keyboard", "24.50"),
+    ("NW-MON-ARM", "Monitor arm, single", "54.00"),
+    ("NW-CHR-MAT", "Chair mat, 36x48 in", "46.80"),
+    ("NW-LMP-LED", "LED desk lamp", "27.30"),
+    ("NW-SHR-CRS", "Cross-cut shredder, 10 sheet", "89.00"),
+    ("NW-WST-BIN", "Wastebasket, 28 qt", "11.20"),
+    ("NW-FRM-A4", "Certificate frame, A4", "13.85"),
+    ("NW-PNC-HOL", "3-hole punch, 20 sheet", "22.40"),
+    ("NW-RUL-30C", "Ruler, 30 cm", "2.15"),
+    ("NW-ERS-WHT", "Erasers, pack of 20", "4.30"),
+    ("NW-GLU-STK", "Glue sticks, pack of 12", "6.95"),
+    ("NW-TIE-ZIP", "Cable ties, 200 pack", "5.80"),
+    ("NW-BAT-AA", "AA batteries, 24 pack", "15.60"),
+    ("NW-BAT-AAA", "AAA batteries, 24 pack", "14.90"),
+    ("NW-CLN-WIP", "Screen cleaning wipes, 100", "7.70"),
+    ("NW-HDN-PHN", "Headset, USB, mono", "33.25"),
+    ("NW-WBD-90", "Whiteboard 90x60 cm", "58.40"),
+    ("NW-PIN-BRD", "Pin board, cork, 60x45 cm", "26.10"),
+    ("NW-DVD-SLV", "Document wallets, pack of 50", "12.65"),
+    ("NW-LTR-TRY", "Letter tray, 3-tier", "20.95"),
+    ("NW-ROL-BUB", "Bubble wrap roll, 50 m", "31.40"),
+    ("NW-FLS-DRV", "USB flash drive, 64 GB", "8.99"),
+    ("NW-CHR-TLR", "Task chair, ergonomic", "149.00"),
+    ("NW-PRT-LBL", "Label printer ribbon", "18.20"),
     ("NW-PLN-WKL", "Weekly planner, 2025", "10.40"),
 ]
 
@@ -166,24 +204,138 @@ _OFFICE_ITEMS = [
 def build_purchase_orders() -> dict[str, PurchaseOrder]:
     D = Decimal
     pos = [
-        PurchaseOrder("PO-2024-1001", ACME, date(2024, 9, 2), (
-            Line("AC-HOS-12", "Hydraulic hose assembly, 12 in", D("12"), D("45.50")),
-            Line("AC-BRK-ST", "Steel mounting bracket", D("40"), D("8.75")),
-            Line("AC-GLV-PR", "Safety gloves (pair)", D("100"), D("3.20")),
-        )),
-        PurchaseOrder("PO-2024-1002", NORTHWIND, date(2024, 9, 9), tuple(
-            Line(sku, desc, D(str(3 + (i * 7) % 12)), D(price)) for i, (sku, desc, price) in enumerate(_OFFICE_ITEMS)
-        )),
-        PurchaseOrder("PO-2024-1003", GLOBEX, date(2024, 9, 16), (
-            Line("GX-CON-HR", "Cloud migration consulting (hours)", D("80"), D("125.00")),
-            Line("GX-HST-MO", "Managed hosting, monthly", D("3"), D("450.00")),
-            Line("GX-SUP-HR", "Premium support (hours)", D("10"), D("95.00")),
-        )),
-        PurchaseOrder("PO-2024-1004", INITECH, date(2024, 9, 23), (
-            Line("IN-CLN-MO", "Office cleaning service, monthly", D("1"), D("2400.00")),
-            Line("IN-WIN-QT", "Window cleaning, quarterly visit", D("1"), D("680.00")),
-            Line("IN-SUP-KT", "Washroom consumables kit", D("6"), D("42.50")),
-        )),
+        PurchaseOrder(
+            "PO-2024-1001",
+            ACME,
+            date(2024, 9, 2),
+            (
+                Line("AC-HOS-12", "Hydraulic hose assembly, 12 in", D("12"), D("45.50")),
+                Line("AC-BRK-ST", "Steel mounting bracket", D("40"), D("8.75")),
+                Line("AC-GLV-PR", "Safety gloves (pair)", D("100"), D("3.20")),
+            ),
+            tolerance_percent=D("2.00"),
+        ),
+        PurchaseOrder(
+            "PO-2024-1002",
+            NORTHWIND,
+            date(2024, 9, 9),
+            tuple(Line(sku, desc, D(str(3 + (i * 7) % 12)), D(price)) for i, (sku, desc, price) in enumerate(_OFFICE_ITEMS)),
+            tolerance_percent=D("1.00"),
+        ),
+        PurchaseOrder(
+            "PO-2024-1003",
+            GLOBEX,
+            date(2024, 9, 16),
+            (
+                Line("GX-CON-HR", "Cloud migration consulting (hours)", D("80"), D("125.00")),
+                Line("GX-HST-MO", "Managed hosting, monthly", D("3"), D("450.00")),
+                Line("GX-SUP-HR", "Premium support (hours)", D("10"), D("95.00")),
+            ),
+            tolerance_percent=D("0.00"),
+        ),
+        PurchaseOrder(
+            "PO-2024-1004",
+            INITECH,
+            date(2024, 9, 23),
+            (
+                Line("IN-CLN-MO", "Office cleaning service, monthly", D("1"), D("2400.00")),
+                Line("IN-WIN-QT", "Window cleaning, quarterly visit", D("1"), D("680.00")),
+                Line("IN-SUP-KT", "Washroom consumables kit", D("6"), D("42.50")),
+            ),
+            tolerance_percent=D("5.00"),
+        ),
+        PurchaseOrder(
+            "PO-2024-1005",
+            UMBRELLA,
+            date(2024, 9, 30),
+            (
+                Line("UL-FRT-PL", "Pallet freight, Hamburg-Rotterdam", D("14"), D("385.00")),
+                Line("UL-CUS-SH", "Customs clearance per shipment", D("14"), D("62.50")),
+                Line("UL-STO-WK", "Temperature-controlled storage (week)", D("6"), D("210.00")),
+            ),
+            currency="EUR",
+            tolerance_percent=D("3.00"),
+        ),
+        PurchaseOrder(
+            "PO-2024-1006",
+            STARK,
+            date(2024, 10, 2),
+            (
+                Line("SE-BRG-6204", "Precision bearing 6204-2RS", D("250"), D("3.85")),
+                Line("SE-CPL-25", "Shaft coupling, 25 mm", D("40"), D("28.40")),
+                Line("SE-RAIL-600", "Linear guide rail 600 mm", D("12"), D("94.75")),
+            ),
+            currency="GBP",
+            tolerance_percent=D("1.50"),
+        ),
+        PurchaseOrder(
+            "PO-2024-1007",
+            WAYNE,
+            date(2024, 8, 12),
+            (
+                Line("WP-BOX-403025", "Corrugated box 40x30x25 cm", D("2000"), D("0.92")),
+                Line("WP-WRP-ST", "Stretch wrap roll", D("120"), D("7.15")),
+            ),
+            tolerance_percent=D("2.00"),
+            status="CLOSED",
+        ),
+        PurchaseOrder(
+            "PO-2024-1008",
+            HOOLI,
+            date(2024, 10, 7),
+            (
+                Line("HC-CMP-RI", "Compute reserved instances (month)", D("6"), D("1850.00")),
+                Line("HC-OBJ-TB", "Object storage (TB-month)", D("24"), D("23.00")),
+                Line("HC-SUP-MO", "Support plan (month)", D("6"), D("400.00")),
+            ),
+            tolerance_percent=D("0.50"),
+        ),
+        PurchaseOrder(
+            "PO-2024-1009",
+            SOYLENT,
+            date(2024, 7, 22),
+            (
+                Line("SC-LNCH-HD", "Lunch service, per head", D("420"), D("9.80")),
+                Line("SC-SET-EV", "Event setup fee", D("3"), D("150.00")),
+            ),
+            currency="GBP",
+            tolerance_percent=D("5.00"),
+            status="CLOSED",
+        ),
+        PurchaseOrder(
+            "PO-2024-1010",
+            TYRELL,
+            date(2024, 10, 11),
+            (
+                Line("TL-ROT-12", "Centrifuge rotor, 12-place", D("4"), D("1240.00")),
+                Line("TL-PIP-5", "Pipette set, 5-piece", D("15"), D("318.50")),
+                Line("TL-CAL-SV", "Calibration service", D("2"), D("450.00")),
+            ),
+            tolerance_percent=D("2.50"),
+        ),
+        PurchaseOrder(
+            "PO-2024-1011",
+            VANDELAY,
+            date(2024, 10, 15),
+            (
+                Line("VI-OIL-5L", "Olive oil, 5 L tin", D("300"), D("21.40")),
+                Line("VI-VIN-1L", "Balsamic vinegar, 1 L", D("200"), D("8.95")),
+            ),
+            currency="EUR",
+            tolerance_percent=D("0.00"),
+        ),
+        PurchaseOrder(
+            "PO-2024-1012",
+            MASSIVE,
+            date(2024, 10, 21),
+            (
+                Line("MD-SEQ-RUN", "Sequencing run", D("8"), D("3200.00")),
+                Line("MD-ANL-HR", "Data analysis (hours)", D("120"), D("145.00")),
+                Line("MD-KIT-SP", "Sample prep kit", D("30"), D("260.00")),
+                Line("MD-CRR-CC", "Courier & cold chain", D("8"), D("185.00")),
+            ),
+            tolerance_percent=D("10.00"),
+        ),
     ]
     return {p.po_number: p for p in pos}
 
@@ -196,20 +348,137 @@ def build_invoices(pos: dict[str, PurchaseOrder]) -> list[Invoice]:
 
     po1, po2, po3, po4 = (pos[k] for k in ("PO-2024-1001", "PO-2024-1002", "PO-2024-1003", "PO-2024-1004"))
     return [
-        Invoice("invoice_standard_digital.pdf", "ACME-INV-20417", ACME, date(2024, 9, 20), full(po1),
-                po1.po_number, (("Sales tax", D("0.0700")),), notes="Net 30. Thank you for your business."),
-        Invoice("invoice_multipage.pdf", "NWC-2024-09-0832", NORTHWIND, date(2024, 9, 27), full(po2),
-                po2.po_number, (("Sales tax", D("0.0725")),), notes="Net 45. Deliveries completed in full on 24 Sep 2024."),
-        Invoice("invoice_tax_separated.pdf", "GX-INV-5589", GLOBEX, date(2024, 10, 1), full(po3),
-                po3.po_number, (("State sales tax", D("0.0625")), ("City service tax", D("0.0150")),
-                                ("Technology levy", D("0.0050"))), notes="Services rendered 1-30 Sep 2024. Net 30."),
+        Invoice(
+            "invoice_standard_digital.pdf",
+            "ACME-INV-20417",
+            ACME,
+            date(2024, 9, 20),
+            full(po1),
+            po1.po_number,
+            (("Sales tax", D("0.0700")),),
+            notes="Net 30. Thank you for your business.",
+        ),
+        Invoice(
+            "invoice_multipage.pdf",
+            "NWC-2024-09-0832",
+            NORTHWIND,
+            date(2024, 9, 27),
+            full(po2),
+            po2.po_number,
+            (("Sales tax", D("0.0725")),),
+            notes="Net 45. Deliveries completed in full on 24 Sep 2024.",
+        ),
+        Invoice(
+            "invoice_tax_separated.pdf",
+            "GX-INV-5589",
+            GLOBEX,
+            date(2024, 10, 1),
+            full(po3),
+            po3.po_number,
+            (("State sales tax", D("0.0625")), ("City service tax", D("0.0150")), ("Technology levy", D("0.0050"))),
+            notes="Services rendered 1-30 Sep 2024. Net 30.",
+        ),
         # Same vendor as PO-1001 and similar goods, but no PO reference anywhere on the document.
-        Invoice("invoice_missing_po.pdf", "ACME-INV-20433", ACME, date(2024, 10, 4),
-                (Line("AC-HOS-12", "Hydraulic hose assembly, 12 in", D("6"), D("45.50")),
-                 Line("AC-GLV-PR", "Safety gloves (pair)", D("50"), D("3.20"))),
-                None, (("Sales tax", D("0.0700")),), notes="Net 30."),
-        Invoice("invoice_scanned.pdf", "INI-77120", INITECH, date(2024, 10, 8), full(po4),
-                po4.po_number, (("Sales tax", D("0.0650")),), scanned=True, notes="Net 30. Remit to address above."),
+        Invoice(
+            "invoice_missing_po.pdf",
+            "ACME-INV-20433",
+            ACME,
+            date(2024, 10, 4),
+            (
+                Line("AC-HOS-12", "Hydraulic hose assembly, 12 in", D("6"), D("45.50")),
+                Line("AC-GLV-PR", "Safety gloves (pair)", D("50"), D("3.20")),
+            ),
+            None,
+            (("Sales tax", D("0.0700")),),
+            notes="Net 30.",
+        ),
+        Invoice(
+            "invoice_scanned.pdf",
+            "INI-77120",
+            INITECH,
+            date(2024, 10, 8),
+            full(po4),
+            po4.po_number,
+            (("Sales tax", D("0.0650")),),
+            scanned=True,
+            notes="Net 30. Remit to address above.",
+        ),
+        # --- more invoices, one per seed PO (except PO-1009, deliberately left uninvoiced) ---
+        Invoice(
+            "invoice_umbrella_eur.pdf",
+            "UL-2024-4471",
+            UMBRELLA,
+            date(2024, 10, 14),
+            full(pos["PO-2024-1005"]),
+            "PO-2024-1005",
+            (("VAT", D("0.1900")),),
+            currency="EUR",
+            notes="Zahlbar innerhalb 30 Tagen. Net 30.",
+        ),
+        Invoice(
+            "invoice_stark_gbp.pdf",
+            "SEC-90318",
+            STARK,
+            date(2024, 10, 16),
+            full(pos["PO-2024-1006"]),
+            "PO-2024-1006",
+            (("VAT", D("0.2000")),),
+            currency="GBP",
+            notes="Net 30.",
+        ),
+        # Billed against a PO that is already CLOSED.
+        Invoice(
+            "invoice_wayne_closed_po.pdf",
+            "WP-55012",
+            WAYNE,
+            date(2024, 10, 18),
+            full(pos["PO-2024-1007"]),
+            "PO-2024-1007",
+            (("Sales tax", D("0.0825")),),
+            notes="Net 30.",
+        ),
+        Invoice(
+            "invoice_hooli_tax_exempt.pdf",
+            "HCS-2024-10-0091",
+            HOOLI,
+            date(2024, 10, 22),
+            full(pos["PO-2024-1008"]),
+            "PO-2024-1008",
+            (),
+            notes="Tax exempt: reverse charge applies. Net 15.",
+        ),
+        Invoice(
+            "invoice_tyrell.pdf",
+            "TLE-31877",
+            TYRELL,
+            date(2024, 10, 25),
+            full(pos["PO-2024-1010"]),
+            "PO-2024-1010",
+            (("Sales tax", D("0.0675")),),
+            notes="Net 30.",
+        ),
+        Invoice(
+            "invoice_vandelay_eur.pdf",
+            "VIE-2024-0215",
+            VANDELAY,
+            date(2024, 10, 28),
+            full(pos["PO-2024-1011"]),
+            "PO-2024-1011",
+            (("IVA", D("0.2100")),),
+            currency="EUR",
+            notes="Net 60.",
+        ),
+        # Partial billing: only the first two PO lines.
+        Invoice(
+            "invoice_massive_partial.pdf",
+            "MDR-2024-0777",
+            MASSIVE,
+            date(2024, 11, 1),
+            pos["PO-2024-1012"].lines[:2],
+            "PO-2024-1012",
+            (("Sales tax", D("0.0700")),),
+            notes="Phase 1 of 2. Remaining items to be invoiced separately.",
+        ),
     ]
 
 
@@ -231,8 +500,17 @@ def render_invoice_pdf(inv: Invoice) -> bytes:
     """Render a digital (text-layer) invoice PDF to bytes."""
     st = _styles()
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm,
-                            bottomMargin=20 * mm, title=f"Invoice {inv.invoice_number}", author=inv.vendor.name, invariant=1)
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=16 * mm,
+        bottomMargin=20 * mm,
+        title=f"Invoice {inv.invoice_number}",
+        author=inv.vendor.name,
+        invariant=1,
+    )
     meta = [
         ["Invoice No:", inv.invoice_number],
         ["Invoice Date:", inv.invoice_date.strftime("%d %b %Y")],
@@ -240,41 +518,77 @@ def render_invoice_pdf(inv: Invoice) -> bytes:
     ]
     if inv.po_number:
         meta.append(["PO Number:", inv.po_number])
-    meta.append(["Currency:", "USD"])
+    meta.append(["Currency:", inv.currency])
     meta_tbl = Table([[Paragraph(a, st["b"]), Paragraph(b, st["n"])] for a, b in meta], colWidths=[28 * mm, 45 * mm])
-    head = Table([[
-        [Paragraph(inv.vendor.name, st["v"])] + [Paragraph(a, st["n"]) for a in inv.vendor.address]
-        + [Paragraph(f"Tax ID: {inv.vendor.tax_id}", st["s"])],
-        [Paragraph("INVOICE", st["h"])],
-    ]], colWidths=[100 * mm, 74 * mm])
+    head = Table(
+        [
+            [
+                [Paragraph(inv.vendor.name, st["v"])]
+                + [Paragraph(a, st["n"]) for a in inv.vendor.address]
+                + [Paragraph(f"Tax ID: {inv.vendor.tax_id}", st["s"])],
+                [Paragraph("INVOICE", st["h"])],
+            ]
+        ],
+        colWidths=[100 * mm, 74 * mm],
+    )
     head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (1, 0), "RIGHT")]))
-    parties = Table([[
-        [Paragraph("Bill To", st["b"])] + [Paragraph(x, st["n"]) for x in BILL_TO], meta_tbl,
-    ]], colWidths=[100 * mm, 74 * mm])
+    parties = Table(
+        [
+            [
+                [Paragraph("Bill To", st["b"])] + [Paragraph(x, st["n"]) for x in BILL_TO],
+                meta_tbl,
+            ]
+        ],
+        colWidths=[100 * mm, 74 * mm],
+    )
     parties.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
 
     rows = [["#", "Item", "Description", "Qty", "Unit Price", "Amount"]]
     for i, ln in enumerate(inv.lines, 1):
-        rows.append([str(i), ln.sku, Paragraph(ln.description, st["n"]), f"{ln.quantity:f}", money(ln.unit_price), money(ln.amount)])
+        rows.append(
+            [
+                str(i),
+                ln.sku,
+                Paragraph(ln.description, st["n"]),
+                f"{ln.quantity:f}",
+                money(ln.unit_price, inv.currency),
+                money(ln.amount, inv.currency),
+            ]
+        )
     items = Table(rows, colWidths=[8 * mm, 24 * mm, 64 * mm, 14 * mm, 30 * mm, 34 * mm], repeatRows=1)
-    items.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f3a5f")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("ALIGN", (3, 0), (-1, -1), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f5f9")]),
-        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LINEBELOW", (0, -1), (-1, -1), 0.8, colors.HexColor("#1f3a5f")),
-    ]))
+    items.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f3a5f")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f5f9")]),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LINEBELOW", (0, -1), (-1, -1), 0.8, colors.HexColor("#1f3a5f")),
+            ]
+        )
+    )
 
-    tot = [["Subtotal", money(inv.subtotal)]]
-    tot += [[f"{label} ({rate * 100:.2f}%)", money(amount)] for label, rate, amount in inv.tax_amounts]
-    tot.append(["TOTAL DUE (USD)", money(inv.total)])
+    tot = [["Subtotal", money(inv.subtotal, inv.currency)]]
+    tot += [[f"{label} ({rate * 100:.2f}%)", money(amount, inv.currency)] for label, rate, amount in inv.tax_amounts]
+    tot.append([f"TOTAL DUE ({inv.currency})", money(inv.total, inv.currency)])
     totals = Table(tot, colWidths=[50 * mm, 34 * mm], hAlign="RIGHT")
-    totals.setStyle(TableStyle([
-        ("ALIGN", (1, 0), (1, -1), "RIGHT"), ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"), ("LINEABOVE", (0, -1), (-1, -1), 0.8, colors.black),
-        ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-    ]))
+    totals.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("LINEABOVE", (0, -1), (-1, -1), 0.8, colors.black),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ]
+        )
+    )
     story = [head, Spacer(1, 8 * mm), parties, Spacer(1, 8 * mm), items, Spacer(1, 6 * mm), totals, Spacer(1, 8 * mm)]
     if inv.notes:
         story.append(Paragraph(inv.notes, st["s"]))
@@ -332,10 +646,19 @@ def generate_all(output_dir: Path = ROOT / "sample_data") -> tuple[list[Generate
         pdf = render_scanned_pdf(digital) if inv.scanned else digital
         path = inv_dir / inv.file_name
         path.write_bytes(pdf)
-        generated.append(GeneratedInvoice(
-            path=path, invoice_number=inv.invoice_number, po_number=inv.po_number, vendor_name=inv.vendor.name,
-            subtotal=inv.subtotal, total=inv.total, scanned=inv.scanned, tax_labels=[t[0] for t in inv.taxes],
-        ))
+        generated.append(
+            GeneratedInvoice(
+                path=path,
+                invoice_number=inv.invoice_number,
+                po_number=inv.po_number,
+                vendor_name=inv.vendor.name,
+                subtotal=inv.subtotal,
+                total=inv.total,
+                scanned=inv.scanned,
+                tax_labels=[t[0] for t in inv.taxes],
+                currency=inv.currency,
+            )
+        )
     return generated, po_path
 
 

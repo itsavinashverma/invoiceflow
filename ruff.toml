@@ -1,0 +1,26 @@
+# Ruff configuration for InvoiceFlow. Run: ruff check . && ruff format --check .
+target-version = "py312"
+line-length = 140
+extend-exclude = ["data", "sample_data"]
+
+[lint]
+# E/W pycodestyle, F pyflakes, I isort, B bugbear, UP pyupgrade, SIM simplifications, RUF ruff-specific,
+# S security (bandit rules), C4 comprehensions, PIE misc.
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "S", "C4", "PIE"]
+ignore = [
+    "E501",    # line length is enforced by the formatter where it can be; long strings/messages are fine
+    "RUF001", "RUF002", "RUF003",  # intentional typographic characters (en dash, x, euro/pound/rupee symbols) in text
+    "S101",    # assert is used by design in tests and for internal invariants
+    "C408",    # dict(label=..., value=...) is deliberate: it reads better than quoted keys for UI card definitions
+    "UP046", "UP047",  # TypeVar/Generic kept in the classic form for readability and wider tool support
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["S", "B011", "SIM117", "RUF012", "E741", "B017", "B018", "RUF059"]  # RUF059: tuple-unpacking helper results, using only some
+"scripts/*" = ["E402", "S"]
+
+[lint.isort]
+known-first-party = ["invoiceflow"]
+
+[format]
+quote-style = "double"

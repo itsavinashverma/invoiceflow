@@ -80,8 +80,13 @@ def ground_truth_json(gen_module, file_name: str, **overrides) -> dict:
         "tax_total": str(sum(a for _, _, a in inv.tax_amounts)),
         "grand_total": str(inv.total),
         "line_items": [
-            {"description": ln.description, "item_code": ln.sku, "quantity": str(ln.quantity),
-             "unit_price": str(ln.unit_price), "line_total": str(ln.amount)}
+            {
+                "description": ln.description,
+                "item_code": ln.sku,
+                "quantity": str(ln.quantity),
+                "unit_price": str(ln.unit_price),
+                "line_total": str(ln.amount),
+            }
             for ln in inv.lines
         ],
         "evidence": [{"field": "invoice_number", "snippet": f"Invoice No: {inv.invoice_number}"}],
@@ -100,8 +105,12 @@ def ai_settings(settings):
 
 @pytest.mark.parametrize(
     "key, file_name",
-    [("standard", "invoice_standard_digital.pdf"), ("multipage", "invoice_multipage.pdf"),
-     ("tax", "invoice_tax_separated.pdf"), ("missing_po", "invoice_missing_po.pdf")],
+    [
+        ("standard", "invoice_standard_digital.pdf"),
+        ("multipage", "invoice_multipage.pdf"),
+        ("tax", "invoice_tax_separated.pdf"),
+        ("missing_po", "invoice_missing_po.pdf"),
+    ],
 )
 def test_synthetic_invoices_structured_and_amounts_exact(demo, gen_module, ai_settings, key, file_name):
     g = demo[key]
@@ -174,8 +183,15 @@ def test_forged_delimiters_are_neutralised():
 
 @pytest.mark.parametrize(
     "bad",
-    ["not json at all", "{\"invoice_number\": ", "[1, 2]", "", None, json.dumps({"grand_total": 1301.12}),
-     json.dumps({"line_items": "nope"})],
+    [
+        "not json at all",
+        '{"invoice_number": ',
+        "[1, 2]",
+        "",
+        None,
+        json.dumps({"grand_total": 1301.12}),
+        json.dumps({"line_items": "nope"}),
+    ],
 )
 def test_bad_output_is_retried_then_fails_cleanly(ai_settings, bad):
     client, sdk, sleeps = make_client(response(bad), response(bad), response(bad))
@@ -226,8 +242,11 @@ def test_no_candidates_is_invalid(ai_settings):
 
 
 def test_transient_errors_retry_with_backoff_then_succeed(ai_settings):
-    client, sdk, sleeps = make_client(api_error(503, cls=genai_errors.ServerError), api_error(504, cls=genai_errors.ServerError),
-                                      response(json.dumps({"invoice_number": "X1"})))
+    client, sdk, sleeps = make_client(
+        api_error(503, cls=genai_errors.ServerError),
+        api_error(504, cls=genai_errors.ServerError),
+        response(json.dumps({"invoice_number": "X1"})),
+    )
     rec = run_ai_extraction("Invoice X1", ai_settings, client=client)
     assert rec.status == "success" and rec.attempts == 3
     assert len(sleeps) == 2 and sleeps[1] > sleeps[0]  # exponential
@@ -380,7 +399,11 @@ def test_records_round_trip_through_database(tmp_path, demo, gen_module, ai_sett
     ingest = extract_document(g.path.read_bytes(), g.path.name, ai_settings)
     client, *_ = make_client(response(json.dumps(ground_truth_json(gen_module, "invoice_tax_separated.pdf"))))
     ok = run_ai_extraction(ingest.text, ai_settings, file_sha256=ingest.file_sha256, client=client)
-    client, *_ = make_client(api_error(503, cls=genai_errors.ServerError), api_error(503, cls=genai_errors.ServerError), api_error(503, cls=genai_errors.ServerError))
+    client, *_ = make_client(
+        api_error(503, cls=genai_errors.ServerError),
+        api_error(503, cls=genai_errors.ServerError),
+        api_error(503, cls=genai_errors.ServerError),
+    )
     down = run_ai_extraction(ingest.text, ai_settings, file_sha256=ingest.file_sha256, client=client)
 
     engine = create_db_engine(f"sqlite:///{(tmp_path / 'r.db').as_posix()}")

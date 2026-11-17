@@ -1,6 +1,19 @@
+# Streamlit server/client settings. Committed on purpose: it contains no secrets.
+# (Secrets live in .streamlit/secrets.toml locally, or in the app's Secrets panel on Streamlit Community Cloud.)
+
 [server]
 headless = true
-maxUploadSize = 10
+maxUploadSize = 10            # MB. Hard cap enforced by the server BEFORE the app sees the file. Keep >= MAX_UPLOAD_MB.
+enableXsrfProtection = true   # explicit, so a deployment never relies on defaults
+enableCORS = true
 
 [browser]
 gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = "none"     # visitors see only generic error text; stack traces and messages go to the server log
+
+[theme]
+primaryColor = "#2F5BEA"
+font = "sans serif"

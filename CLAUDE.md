@@ -32,3 +32,10 @@ UI contains no business logic. Pipeline emits per-stage events consumed by the l
 - Tests: `python -m pytest -q`
 - App: `streamlit run app.py`
 - Synthetic data: `python scripts/generate_demo_data.py`; DB init: `python scripts/seed_database.py`
+- Lint/format: `ruff check .` and `ruff format --check .` (config in `ruff.toml`); both must be clean.
+
+## Deployment (free: GitHub + Streamlit Community Cloud + Supabase + Gemini free tier)
+- Guides: `docs/DEPLOYMENT.md` (steps), `docs/SECURITY_REVIEW.md` (findings). Entry point `app.py`; system package in `packages.txt`.
+- Secrets only via env / Streamlit secrets; templates are `.env.example` and `.streamlit/secrets.toml.example` (placeholders only).
+- This is a **demonstration with synthetic data**, not a production payment-approval system. Never add approve/pay actions without real authentication.
+- **Never push, create accounts/projects/apps or deploy without explicit user approval.**

@@ -1,4 +1,5 @@
 """Tesseract OCR fallback for pages without a usable text layer."""
+
 from __future__ import annotations
 
 import logging
@@ -39,7 +40,7 @@ def ensure_tesseract(cmd: str | None, lang: str = constants.OCR_LANG) -> str:
     except pytesseract.TesseractNotFoundError as exc:
         where = f"at {cmd!r}" if cmd else "on PATH"
         raise OcrUnavailableError(f"Tesseract OCR was not found {where}. {INSTALL_HINT}") from exc
-    except Exception as exc:  # noqa: BLE001 - broken install, bad permissions, policy blocks, ...
+    except Exception as exc:
         raise OcrUnavailableError(f"Tesseract OCR could not be run ({type(exc).__name__}: {exc}). {INSTALL_HINT}") from exc
     if lang not in languages:
         raise OcrUnavailableError(
@@ -91,5 +92,5 @@ def ocr_page(page: pymupdf.Page, page_number: int, lang: str = constants.OCR_LAN
         raise OcrUnavailableError(f"Tesseract OCR disappeared while processing page {page_number}. {INSTALL_HINT}") from exc
     except RuntimeError as exc:  # pytesseract signals timeouts as RuntimeError
         raise ExtractionError(f"OCR failed on page {page_number}: {exc}") from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ExtractionError(f"OCR failed on page {page_number} ({type(exc).__name__}: {exc})") from exc

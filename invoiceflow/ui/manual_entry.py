@@ -3,6 +3,7 @@
 It only collects text and builds an ``InvoiceExtraction``; parsing and validation happen in the same
 normalizer used for AI output (``record_from_manual``), so manual data gets no special treatment.
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -11,12 +12,20 @@ import streamlit as st
 from invoiceflow.schemas import InvoiceExtraction, LineItemExtraction
 
 _SCALAR_FIELDS = [
-    ("invoice_number", "Invoice number"), ("invoice_date", "Invoice date (YYYY-MM-DD)"),
-    ("due_date", "Due date (YYYY-MM-DD)"), ("purchase_order_number", "PO number"),
-    ("vendor_name", "Vendor name"), ("vendor_address", "Vendor address"),
-    ("vendor_tax_id", "Vendor tax ID"), ("vendor_email", "Vendor email"),
-    ("currency", "Currency (ISO code, e.g. USD)"), ("subtotal", "Subtotal"), ("tax_total", "Tax total"),
-    ("shipping_fee", "Shipping fee"), ("discount", "Discount"), ("grand_total", "Grand total"),
+    ("invoice_number", "Invoice number"),
+    ("invoice_date", "Invoice date (YYYY-MM-DD)"),
+    ("due_date", "Due date (YYYY-MM-DD)"),
+    ("purchase_order_number", "PO number"),
+    ("vendor_name", "Vendor name"),
+    ("vendor_address", "Vendor address"),
+    ("vendor_tax_id", "Vendor tax ID"),
+    ("vendor_email", "Vendor email"),
+    ("currency", "Currency (ISO code, e.g. USD)"),
+    ("subtotal", "Subtotal"),
+    ("tax_total", "Tax total"),
+    ("shipping_fee", "Shipping fee"),
+    ("discount", "Discount"),
+    ("grand_total", "Grand total"),
     ("payment_terms", "Payment terms"),
 ]
 _LINE_COLUMNS = ["description", "item_code", "quantity", "unit_price", "line_total"]
@@ -31,7 +40,7 @@ def _cell(value: object) -> str | None:
 
 def lines_to_dataframe(prefill: InvoiceExtraction | None) -> pd.DataFrame:
     rows = [{c: getattr(li, c) or "" for c in _LINE_COLUMNS} for li in (prefill.line_items if prefill else [])]
-    return pd.DataFrame(rows or [{c: "" for c in _LINE_COLUMNS}], columns=_LINE_COLUMNS, dtype="object")
+    return pd.DataFrame(rows or [dict.fromkeys(_LINE_COLUMNS, "")], columns=_LINE_COLUMNS, dtype="object")
 
 
 def dataframe_to_lines(df: pd.DataFrame) -> list[LineItemExtraction]:
@@ -52,7 +61,7 @@ def manual_entry_form(prefill: InvoiceExtraction | None, key: str) -> InvoiceExt
             default = (getattr(prefill, name, None) or "") if prefill else ""
             values[name] = cols[i % 2].text_input(label, value=default, key=f"{key}_{name}")
         st.markdown("**Line items** (add or edit rows; amounts as plain numbers)")
-        edited = st.data_editor(lines_to_dataframe(prefill), num_rows="dynamic", key=f"{key}_lines", use_container_width=True)
+        edited = st.data_editor(lines_to_dataframe(prefill), num_rows="dynamic", key=f"{key}_lines", width="stretch")
         submitted = st.form_submit_button("Use these values")
     if not submitted:
         return None

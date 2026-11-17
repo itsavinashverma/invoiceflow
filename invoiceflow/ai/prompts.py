@@ -4,6 +4,7 @@ The invoice text is untrusted. It is placed inside delimiters that contain a ran
 text inside the document cannot forge an "end of document" marker, and the system instruction
 tells the model to treat everything inside as data.
 """
+
 from __future__ import annotations
 
 import re

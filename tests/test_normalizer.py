@@ -64,8 +64,12 @@ def test_parse_date():
 
 def test_normalize_builds_decimals_and_dates():
     ex = InvoiceExtraction(
-        invoice_number="INV-1", invoice_date="2024-09-20", currency="usd", subtotal="1,216.00",
-        tax_total="85.12", grand_total="1301.12",
+        invoice_number="INV-1",
+        invoice_date="2024-09-20",
+        currency="usd",
+        subtotal="1,216.00",
+        tax_total="85.12",
+        grand_total="1301.12",
         line_items=[LineItemExtraction(description="x", quantity="12", unit_price="45.5", line_total="546.00")],
     )
     n, warnings = normalize_extraction(ex)
@@ -101,6 +105,100 @@ def test_missing_fields_computed_from_values_not_model_claims():
     assert {"purchase_order_number", "grand_total", "line_items"} <= set(n.missing_fields)
 
 
+@pytest.mark.parametrize(
+    "a, b",
+    [
+        ("ACME Industrial Supplies, Ltd.", "Acme Industrial Supplies Limited"),
+        ("Acme & Sons Inc", "ACME and Sons"),
+        ("Müller Söhne GmbH", "Muller Sohne"),
+        ("  Globex   IT  Services LLC ", "globex it services"),
+    ],
+)
+def test_vendor_names_normalise_to_the_same_key(a, b):
+    from invoiceflow.services.normalizer import normalize_vendor_name
+
+    assert normalize_vendor_name(a) == normalize_vendor_name(b) is not None
+
+
+@pytest.mark.parametrize(
+    "a, b, kind",
+    [
+        ("Acme Industrial Supplies Ltd", "ACME INDUSTRIAL SUPPLIES, LIMITED", "exact"),
+        ("Acme Inc.", "ACME Incorporated", "exact"),
+        ("Vandelay Import Export S.L.", "vandelay import export sl", "exact"),
+        ("Acme L.L.C.", "Acme LLC", "exact"),
+        ("Northwind Office Co", "Northwind Office Company", "exact"),
+        ("Acme Pvt Ltd", "ACME Private Limited", "exact"),
+        ("Acme Industrial Supplies", "Acme Industrial Supplies Ltd", "legal_form_omitted"),
+        ("Acme Inc", "Acme LLC", "different_legal_form"),
+        ("Acme Ltd", "Acme Co Ltd", "different_legal_form"),
+        ("Acme Industrial Supplies Ltd", "Acme Industries Ltd", "different"),
+        ("Acme Industrial", "Acme Industrial Supplies", "different"),
+        ("Globex IT Services LLC", "Acme Industrial Supplies Ltd", "different"),
+        ("Acme", None, "missing"),
+        ("  ", "Acme", "missing"),
+    ],
+)
+def test_compare_vendors_is_conservative(a, b, kind):
+    from invoiceflow.services.normalizer import compare_vendors
+
+    got = compare_vendors(a, b)
+    assert got.kind == kind
+    assert got.matches == (kind in ("exact", "legal_form_omitted"))
+    assert compare_vendors(b, a).kind == kind  # symmetric
+
+
+def test_parse_vendor_preserves_the_original_name():
+    from invoiceflow.services.normalizer import parse_vendor_name
+
+    p = parse_vendor_name("  ACME  Industrial Supplies, Ltd. ")
+    assert p.original == "  ACME  Industrial Supplies, Ltd. "  # never modified
+    assert (p.base, p.legal_form) == ("acme industrial supplies", "ltd")
+    assert parse_vendor_name("Acme Co Ltd").legal_form == "co ltd"  # several trailing legal words are kept together
+
+
+@pytest.mark.parametrize(
+    "a, b, same",
+    [
+        ("PO-2024-1001", "po-2024-1001", True),
+        ("PO-2024-1001", " PO-2024-1001 ", True),
+        ("PO 2024-1001", "PO2024-1001", True),
+        ("PO‑2024–1001", "PO-2024-1001", True),
+        ("PO-1-001", "PO-10-01", False),
+        ("PO-2024-1001", "PO-2024-1002", False),
+        ("PO-2024-1001", "PO-2024-1OO1", False),
+    ],
+)
+def test_po_number_normalisation(a, b, same):
+    from invoiceflow.services.normalizer import normalize_po_number
+
+    assert (normalize_po_number(a) == normalize_po_number(b)) is same
+    assert normalize_po_number(None) is None and normalize_po_number("  ") is None
+
+
+def test_vendor_name_edge_cases():
+    from invoiceflow.services.normalizer import normalize_vendor_name
+
+    assert normalize_vendor_name(None) is None and normalize_vendor_name("   ") is None
+    assert normalize_vendor_name("Co") == "co"  # a name that is only a suffix is kept
+    assert normalize_vendor_name("Acme") != normalize_vendor_name("Acme Two")
+
+
+def test_content_hash_is_stable_and_sensitive():
+    from invoiceflow.services.normalizer import compute_content_hash, normalize_invoice_number
+
+    base = ("Acme Ltd", "INV-1", Decimal("10.00"), date(2024, 1, 1))
+    assert compute_content_hash(*base) == compute_content_hash("ACME Limited", " inv-1", Decimal("10.0"), date(2024, 1, 1))
+    for changed in (
+        ("Acme Ltd", "INV-2", Decimal("10.00"), date(2024, 1, 1)),
+        ("Acme Ltd", "INV-1", Decimal("10.01"), date(2024, 1, 1)),
+        ("Acme Ltd", "INV-1", Decimal("10.00"), date(2024, 1, 2)),
+        ("Other", "INV-1", Decimal("10.00"), date(2024, 1, 1)),
+    ):
+        assert compute_content_hash(*changed) != compute_content_hash(*base)
+    assert normalize_invoice_number(" INV - 1 ") == "inv-1" and normalize_invoice_number(None) is None
+
+
 def test_audit_flags_invented_values():
     text = "Invoice No: A-100\nPO Number: PO-7\nSubtotal $1,000.00\nTOTAL $1,070.00"
     ex = InvoiceExtraction(invoice_number="A-100", purchase_order_number="PO-9", subtotal="1000.00", grand_total="1170.00")
@@ -112,10 +210,15 @@ def test_audit_flags_invented_values():
 
 
 def test_audit_evidence_verification():
-    ex = InvoiceExtraction.model_validate({
-        "invoice_number": "A-100",
-        "evidence": [{"field": "invoice_number", "snippet": "Invoice   No:  A-100"}, {"field": "grand_total", "snippet": "TOTAL $9.99"}],
-    })
+    ex = InvoiceExtraction.model_validate(
+        {
+            "invoice_number": "A-100",
+            "evidence": [
+                {"field": "invoice_number", "snippet": "Invoice   No:  A-100"},
+                {"field": "grand_total", "snippet": "TOTAL $9.99"},
+            ],
+        }
+    )
     n, _ = normalize_extraction(ex)
     evidence, warnings = audit_against_source(ex, n, "Invoice No: A-100\nTOTAL $1,070.00")
     assert [e.found_in_source for e in evidence] == [True, False]

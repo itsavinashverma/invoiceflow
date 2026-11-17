@@ -1,8 +1,10 @@
 """Document ingestion: validate, extract the text layer with PyMuPDF, OCR pages that need it."""
+
 from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass
 
 import pymupdf
 
@@ -11,7 +13,7 @@ from invoiceflow.config import Settings, load_settings
 from invoiceflow.exceptions import ExtractionError, NoTextExtractedError, OcrUnavailableError
 from invoiceflow.extraction.ocr_extractor import ensure_tesseract, ocr_page
 from invoiceflow.schemas import ExtractionMethod, ExtractionResult, PageResult
-from invoiceflow.utils.pdf_security import validate_pdf_upload
+from invoiceflow.utils.pdf_security import PdfInfo, validate_pdf_upload
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,7 @@ def _extract_page(doc: pymupdf.Document, index: int) -> PageResult:
         page = doc.load_page(index)
         text = page.get_text("text", sort=True).strip()
         has_images = bool(page.get_images(full=True))
-    except Exception as exc:  # noqa: BLE001 - malformed page
+    except Exception as exc:
         logger.warning("Page %d could not be read: %s", number, exc)
         warnings.append(f"Page {number} could not be read normally ({type(exc).__name__}).")
     chars = meaningful_chars(text)
@@ -87,6 +89,96 @@ def _assemble(
     )
 
 
+@dataclass
+class TextLayer:
+    """State between the stages: validated upload plus per-page results from the text layer."""
+
+    data: bytes
+    info: PdfInfo
+    pages: list[PageResult]
+    metadata: dict[str, str]
+    started: float
+
+    def assemble(self) -> ExtractionResult:
+        return _assemble(
+            self.pages,
+            info_warnings=self.info.warnings,
+            metadata=self.metadata,
+            sha256=self.info.sha256,
+            size=self.info.size_bytes,
+            started=self.started,
+        )
+
+
+def read_text_layer(data: bytes, info: PdfInfo) -> TextLayer:
+    """Stage: read the embedded text of every page with PyMuPDF (no OCR). ``info`` comes from validation."""
+    started = time.perf_counter()
+    try:
+        doc = pymupdf.open(stream=data, filetype="pdf")
+    except Exception as exc:
+        raise ExtractionError("The PDF could not be opened for extraction.") from exc
+    with doc:
+        metadata = {k: v for k in _METADATA_KEYS if (v := (doc.metadata or {}).get(k))}
+        pages = [_extract_page(doc, i) for i in range(doc.page_count)]
+    return TextLayer(data=data, info=info, pages=pages, metadata=metadata, started=started)
+
+
+def pages_needing_ocr(layer: TextLayer) -> list[int]:
+    """1-based numbers of pages with too little text and an image that may hold the rest."""
+    return [p.page_number for p in layer.pages if _needs_ocr(p)]
+
+
+def run_ocr(layer: TextLayer, settings: Settings) -> None:
+    """Stage: OCR the pages that need it, updating ``layer`` in place.
+
+    Raises :class:`OcrUnavailableError` (with ``partial_result``) if Tesseract cannot be used, or
+    :class:`ExtractionError` if OCR fails on a page. Does nothing when no page needs OCR.
+    """
+    numbers = pages_needing_ocr(layer)
+    if not numbers:
+        return
+    logger.info("Pages needing OCR: %s", numbers)
+    try:
+        ensure_tesseract(settings.tesseract_cmd)
+    except OcrUnavailableError as exc:
+        raise OcrUnavailableError(
+            f"Page(s) {', '.join(map(str, numbers))} have no readable text layer and need OCR. {exc}",
+            partial_result=layer.assemble(),
+        ) from exc
+    try:
+        doc = pymupdf.open(stream=layer.data, filetype="pdf")
+    except Exception as exc:
+        raise ExtractionError("The PDF could not be reopened for OCR.") from exc
+    with doc:
+        for p in layer.pages:
+            if p.page_number not in numbers:
+                continue
+            out = ocr_page(doc.load_page(p.page_number - 1), p.page_number)
+            p.ocr_attempted = True
+            p.ocr_confidence = out.confidence
+            ocr_chars = meaningful_chars(out.text)
+            if ocr_chars > p.meaningful_chars:
+                p.text, p.meaningful_chars, p.method = out.text.strip(), ocr_chars, "ocr"
+            if p.method == "none" and p.meaningful_chars > 0:
+                p.method = "text"  # OCR found nothing better; keep the sparse text layer
+            if p.meaningful_chars < constants.MIN_MEANINGFUL_CHARS_PER_PAGE:
+                p.warnings.append(f"Page {p.page_number}: OCR found almost no text.")
+            elif out.confidence is not None and out.confidence < constants.OCR_LOW_CONFIDENCE:
+                p.warnings.append(f"Page {p.page_number}: low OCR confidence ({out.confidence:.0f}/100); verify the data.")
+
+
+def finalize(layer: TextLayer) -> ExtractionResult:
+    """Stage end: flag blank pages and build the result. Raises :class:`NoTextExtractedError` if nothing was read."""
+    for p in layer.pages:
+        if p.method == "none" and not p.ocr_attempted and not p.warnings:
+            p.warnings.append(f"Page {p.page_number} appears to be blank.")
+    result = layer.assemble()
+    if not any(p.method != "none" for p in layer.pages):
+        raise NoTextExtractedError("No readable text was found in the PDF, neither in its text layer nor via OCR.")
+    logger.info("Extracted %d page(s) via %s in %.2fs", result.page_count, result.method, result.duration_seconds)
+    return result
+
+
 def extract_document(
     data: bytes,
     filename: str | None = None,
@@ -94,7 +186,7 @@ def extract_document(
     *,
     content_type: str | None = None,
 ) -> ExtractionResult:
-    """Validate and extract text from an uploaded PDF held in memory.
+    """Validate and extract text from an uploaded PDF held in memory (all stages in one call).
 
     Raises:
         PdfValidationError: rejected upload (wrong type, too large, corrupt, encrypted, ...).
@@ -102,7 +194,6 @@ def extract_document(
         NoTextExtractedError: no page yielded meaningful text.
         ExtractionError: any other extraction failure (e.g. OCR error on a page).
     """
-    started = time.perf_counter()
     settings = settings or load_settings()
     info = validate_pdf_upload(
         data,
@@ -111,50 +202,6 @@ def extract_document(
         max_pages=settings.max_pdf_pages,
         content_type=content_type,
     )
-
-    try:
-        doc = pymupdf.open(stream=data, filetype="pdf")
-    except Exception as exc:  # noqa: BLE001
-        raise ExtractionError("The PDF could not be opened for extraction.") from exc
-
-    with doc:
-        metadata = {k: v for k in _METADATA_KEYS if (v := (doc.metadata or {}).get(k))}
-        pages = [_extract_page(doc, i) for i in range(doc.page_count)]
-
-        to_ocr = [p for p in pages if _needs_ocr(p)]
-        common = dict(info_warnings=info.warnings, metadata=metadata, sha256=info.sha256, size=info.size_bytes, started=started)
-        if to_ocr:
-            numbers = [p.page_number for p in to_ocr]
-            logger.info("Pages needing OCR: %s", numbers)
-            try:
-                ensure_tesseract(settings.tesseract_cmd)
-            except OcrUnavailableError as exc:
-                partial = _assemble(pages, **common)
-                raise OcrUnavailableError(
-                    f"Page(s) {', '.join(map(str, numbers))} have no readable text layer and need OCR. {exc}",
-                    partial_result=partial,
-                ) from exc
-            for p in to_ocr:
-                out = ocr_page(doc.load_page(p.page_number - 1), p.page_number)
-                p.ocr_attempted = True
-                p.ocr_confidence = out.confidence
-                ocr_chars = meaningful_chars(out.text)
-                if ocr_chars > p.meaningful_chars:
-                    p.text, p.meaningful_chars, p.method = out.text.strip(), ocr_chars, "ocr"
-                if p.method == "none" and p.meaningful_chars > 0:
-                    p.method = "text"  # OCR found nothing better; keep the sparse text layer
-                if p.meaningful_chars < constants.MIN_MEANINGFUL_CHARS_PER_PAGE:
-                    p.warnings.append(f"Page {p.page_number}: OCR found almost no text.")
-                elif out.confidence is not None and out.confidence < constants.OCR_LOW_CONFIDENCE:
-                    p.warnings.append(f"Page {p.page_number}: low OCR confidence ({out.confidence:.0f}/100); verify the data.")
-
-        for p in pages:
-            if p.method == "none" and not p.ocr_attempted and not p.warnings:
-                p.warnings.append(f"Page {p.page_number} appears to be blank.")
-
-        result = _assemble(pages, **common)
-
-    if not any(p.method != "none" for p in pages):
-        raise NoTextExtractedError("No readable text was found in the PDF, neither in its text layer nor via OCR.")
-    logger.info("Extracted %d page(s) via %s in %.2fs", result.page_count, result.method, result.duration_seconds)
-    return result
+    layer = read_text_layer(data, info)
+    run_ocr(layer, settings)
+    return finalize(layer)

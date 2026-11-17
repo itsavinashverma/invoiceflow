@@ -4,6 +4,7 @@ Uploads are validated and processed entirely in memory: no temporary file is eve
 there is nothing to clean up and nothing persisted. PyMuPDF does not execute PDF JavaScript or
 fetch external resources; we additionally flag documents that contain such features.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -61,18 +62,14 @@ def validate_pdf_upload(
     if not data:
         raise PdfValidationError("The file is empty.", "empty_file")
     if len(data) > max_bytes:
-        raise PdfValidationError(
-            f"The file is {_mb(len(data))}, above the {_mb(max_bytes)} limit.", "file_too_large"
-        )
+        raise PdfValidationError(f"The file is {_mb(len(data))}, above the {_mb(max_bytes)} limit.", "file_too_large")
     if constants.PDF_MAGIC not in data[: constants.PDF_MAGIC_SEARCH_BYTES]:
-        raise PdfValidationError(
-            "The file is not a real PDF (missing PDF signature), whatever its name says.", "bad_signature"
-        )
+        raise PdfValidationError("The file is not a real PDF (missing PDF signature), whatever its name says.", "bad_signature")
 
     warnings: list[str] = []
     try:
         doc = pymupdf.open(stream=data, filetype="pdf")
-    except Exception as exc:  # noqa: BLE001 - PyMuPDF raises several types for bad input
+    except Exception as exc:
         logger.info("PDF failed to open: %s", exc)
         raise PdfValidationError("The PDF is corrupt or unreadable and could not be opened.", "corrupt_pdf") from exc
 
@@ -85,12 +82,10 @@ def validate_pdf_upload(
         if page_count < 1:
             raise PdfValidationError("The PDF contains no pages.", "no_pages")
         if page_count > max_pages:
-            raise PdfValidationError(
-                f"The PDF has {page_count} pages, above the {max_pages}-page limit.", "too_many_pages"
-            )
+            raise PdfValidationError(f"The PDF has {page_count} pages, above the {max_pages}-page limit.", "too_many_pages")
         try:
             doc.load_page(0)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise PdfValidationError("The PDF is corrupt: its first page cannot be read.", "corrupt_pdf") from exc
         if doc.is_repaired:
             warnings.append("The PDF structure was damaged and was repaired while opening; verify the extracted data.")

@@ -9,14 +9,16 @@ Lookup order for every setting (first hit wins):
 A missing ``GEMINI_API_KEY`` is *not* an error here; callers decide how to degrade visibly.
 Secrets are never logged: use :meth:`Settings.safe_summary` for anything user-facing.
 """
+
 from __future__ import annotations
 
 import logging
 import os
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Mapping
 
 from dotenv import dotenv_values
 
@@ -43,9 +45,9 @@ def normalize_database_url(url: str) -> str:
     url = url.strip()
     for prefix in ("postgres://", "postgresql://"):
         if url.startswith(prefix):
-            return "postgresql+psycopg://" + url[len(prefix):]
+            return "postgresql+psycopg://" + url[len(prefix) :]
     if url.startswith("postgresql+psycopg2://"):
-        return "postgresql+psycopg://" + url[len("postgresql+psycopg2://"):]
+        return "postgresql+psycopg://" + url[len("postgresql+psycopg2://") :]
     return url
 
 
@@ -58,7 +60,7 @@ def _streamlit_secrets() -> Mapping[str, object]:
         import streamlit as st
 
         return {str(k): v for k, v in st.secrets.items() if not isinstance(v, Mapping)}
-    except Exception:  # noqa: BLE001 - secrets backend raises assorted errors when absent
+    except Exception:
         return {}
 
 
@@ -71,6 +73,24 @@ def _int_setting(name: str, raw: str | None, default: int, minimum: int = 1) -> 
         raise ConfigError(f"{name} must be an integer, got {raw!r}") from exc
     if value < minimum:
         raise ConfigError(f"{name} must be >= {minimum}, got {value}")
+    return value
+
+
+def _decimal_setting(name: str, raw: str | None, default: str) -> Decimal:
+    text = raw if raw not in (None, "") else default
+    try:
+        value = Decimal(text)
+    except InvalidOperation as exc:
+        raise ConfigError(f"{name} must be a decimal number, got {text!r}") from exc
+    if not value.is_finite() or value < 0:
+        raise ConfigError(f"{name} must be zero or positive, got {text!r}")
+    return value
+
+
+def _choice_setting(name: str, raw: str | None, choices: tuple[str, ...], default: str) -> str:
+    value = (raw or default).strip().lower()
+    if value not in choices:
+        raise ConfigError(f"{name} must be one of {', '.join(choices)}, got {raw!r}")
     return value
 
 
@@ -95,10 +115,17 @@ class Settings:
     max_pdf_pages: int
     tesseract_cmd: str | None
     gemini_timeout_seconds: int = constants.DEFAULT_GEMINI_TIMEOUT_SECONDS
+    amount_tolerance: Decimal = Decimal(constants.DEFAULT_AMOUNT_TOLERANCE)  # absolute rounding tolerance for invoice arithmetic
+    po_amount_basis: str = constants.PO_BASIS_PRE_TAX  # "pre_tax" or "grand_total"
+    access_code: str | None = None  # optional shared code that visitors must enter (a secret: never displayed)
 
     @property
     def has_gemini_key(self) -> bool:
         return bool(self.gemini_api_key)
+
+    @property
+    def has_access_gate(self) -> bool:
+        return bool(self.access_code)
 
     @property
     def is_sqlite(self) -> bool:
@@ -121,16 +148,13 @@ class Settings:
             "max_upload_mb": str(self.max_upload_mb),
             "max_pdf_pages": str(self.max_pdf_pages),
             "tesseract_cmd": self.tesseract_cmd or "not found (OCR unavailable)",
+            "access_gate": "enabled" if self.has_access_gate else "disabled",
         }
 
 
 def load_settings(env_file: Path | None = None) -> Settings:
     """Build :class:`Settings` from env, Streamlit secrets and ``.env`` (see module docstring)."""
-    dotenv = {
-        k: v
-        for k, v in dotenv_values(env_file or PROJECT_ROOT / ".env").items()
-        if v is not None
-    }
+    dotenv = {k: v for k, v in dotenv_values(env_file or PROJECT_ROOT / ".env").items() if v is not None}
     secrets = _streamlit_secrets()
 
     def get(name: str) -> str | None:
@@ -150,4 +174,27 @@ def load_settings(env_file: Path | None = None) -> Settings:
         gemini_timeout_seconds=_int_setting(
             "GEMINI_TIMEOUT_SECONDS", get("GEMINI_TIMEOUT_SECONDS"), constants.DEFAULT_GEMINI_TIMEOUT_SECONDS
         ),
+        amount_tolerance=_decimal_setting("AMOUNT_TOLERANCE", get("AMOUNT_TOLERANCE"), constants.DEFAULT_AMOUNT_TOLERANCE),
+        po_amount_basis=_choice_setting("PO_AMOUNT_BASIS", get("PO_AMOUNT_BASIS"), constants.PO_AMOUNT_BASES, constants.PO_BASIS_PRE_TAX),
+        access_code=get("ACCESS_CODE"),
     )
+
+
+def is_hosted_environment() -> bool:
+    """True when running on a hosted platform (Streamlit Community Cloud mounts the repo under ``/mount/src``).
+
+    ``INVOICEFLOW_HOSTED=1`` forces it, for other hosts.
+    """
+    if os.environ.get("INVOICEFLOW_HOSTED", "").strip().lower() in ("1", "true", "yes"):
+        return True
+    return PROJECT_ROOT.as_posix().startswith("/mount/src")
+
+
+def storage_warning(settings: Settings) -> str | None:
+    """A warning when data would silently be lost: SQLite on a hosted platform's ephemeral disk."""
+    if settings.is_sqlite and is_hosted_environment():
+        return (
+            "This deployment stores data in a local SQLite file on temporary hosted storage. It will be erased whenever the app "
+            "restarts or is redeployed. Set DATABASE_URL to a PostgreSQL database (for example Supabase) in the app's secrets."
+        )
+    return None

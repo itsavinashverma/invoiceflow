@@ -1,4 +1,5 @@
 """Logging setup. Never log secrets; use ``Settings.safe_summary()`` for config."""
+
 from __future__ import annotations
 
 import logging

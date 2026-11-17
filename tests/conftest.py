@@ -32,6 +32,54 @@ def settings(clean_env):
     return load_settings(clean_env)
 
 
+@pytest.fixture
+def db_engine(tmp_path):
+    """A fresh, migrated SQLite file database."""
+    from invoiceflow.database.connection import create_db_engine, init_db
+
+    engine = create_db_engine(f"sqlite:///{(tmp_path / 'test.db').as_posix()}")
+    init_db(engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def db(db_engine):
+    """A session on ``db_engine``; committed at the end of the test."""
+    from invoiceflow.database.connection import session_scope
+
+    with session_scope(db_engine) as session:
+        yield session
+
+
+@pytest.fixture
+def ui_env(clean_env, monkeypatch, tmp_path):
+    """An empty, migrated database that the UI pages (via DATABASE_URL) will use. No developer .env is read."""
+    from invoiceflow.database import connection
+    from invoiceflow.database.connection import create_db_engine, init_db
+
+    monkeypatch.setattr("invoiceflow.config.PROJECT_ROOT", tmp_path)
+    url = f"sqlite:///{(tmp_path / 'ui.db').as_posix()}"
+    monkeypatch.setenv("DATABASE_URL", url)
+    connection.reset_engine_cache()
+    engine = create_db_engine(url)
+    init_db(engine)
+    yield engine
+    connection.reset_engine_cache()
+    engine.dispose()
+
+
+@pytest.fixture
+def seeded(ui_env):
+    """``ui_env`` with the 12 synthetic demo purchase orders loaded."""
+    from invoiceflow.database.connection import session_scope
+    from invoiceflow.database.seed import seed_purchase_orders
+
+    with session_scope(ui_env) as s:
+        seed_purchase_orders(s)
+    return ui_env
+
+
 @pytest.fixture(autouse=True)
 def offline_guard(request, monkeypatch):
     """Tests must never reach the real Gemini API. Only tests marked ``live`` may build a real client."""
@@ -72,6 +120,7 @@ def demo(gen_module):
         "tax": by_name["invoice_tax_separated.pdf"],
         "missing_po": by_name["invoice_missing_po.pdf"],
         "scanned": by_name["invoice_scanned.pdf"],
+        "all": generated,
     }
 
 

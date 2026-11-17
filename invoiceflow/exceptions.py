@@ -1,4 +1,5 @@
 """Exceptions for the ingestion layer. ``str(exc)`` is always safe and actionable to show a user."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -95,6 +96,6 @@ class OcrUnavailableError(ExtractionError):
 
     code = "ocr_unavailable"
 
-    def __init__(self, message: str, partial_result: "ExtractionResult | None" = None) -> None:
+    def __init__(self, message: str, partial_result: ExtractionResult | None = None) -> None:
         super().__init__(message)
         self.partial_result = partial_result

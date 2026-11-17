@@ -10,6 +10,8 @@
       "tax_id": "US-47-1234567"
     },
     "currency": "USD",
+    "tolerance_percent": "2.00",
+    "status": "OPEN",
     "issue_date": "2024-09-02",
     "lines": [
       {
@@ -47,6 +49,8 @@
       "tax_id": "US-31-7654321"
     },
     "currency": "USD",
+    "tolerance_percent": "1.00",
+    "status": "OPEN",
     "issue_date": "2024-09-09",
     "lines": [
       {
@@ -364,6 +368,8 @@
       "tax_id": "US-74-2468135"
     },
     "currency": "USD",
+    "tolerance_percent": "0.00",
+    "status": "OPEN",
     "issue_date": "2024-09-16",
     "lines": [
       {
@@ -401,6 +407,8 @@
       "tax_id": "US-34-1357924"
     },
     "currency": "USD",
+    "tolerance_percent": "5.00",
+    "status": "OPEN",
     "issue_date": "2024-09-23",
     "lines": [
       {
@@ -426,5 +434,303 @@
       }
     ],
     "total": "3335.00"
+  },
+  {
+    "po_number": "PO-2024-1005",
+    "vendor": {
+      "name": "Umbrella Logistics GmbH",
+      "address": [
+        "Hafenstrasse 14",
+        "20457 Hamburg, Germany"
+      ],
+      "tax_id": "DE-811234567"
+    },
+    "currency": "EUR",
+    "tolerance_percent": "3.00",
+    "status": "OPEN",
+    "issue_date": "2024-09-30",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "UL-FRT-PL",
+        "description": "Pallet freight, Hamburg-Rotterdam",
+        "quantity": "14",
+        "unit_price": "385.00"
+      },
+      {
+        "line_no": 2,
+        "sku": "UL-CUS-SH",
+        "description": "Customs clearance per shipment",
+        "quantity": "14",
+        "unit_price": "62.50"
+      },
+      {
+        "line_no": 3,
+        "sku": "UL-STO-WK",
+        "description": "Temperature-controlled storage (week)",
+        "quantity": "6",
+        "unit_price": "210.00"
+      }
+    ],
+    "total": "7525.00"
+  },
+  {
+    "po_number": "PO-2024-1006",
+    "vendor": {
+      "name": "Stark Engineering Components Ltd",
+      "address": [
+        "Unit 9, Forge Park",
+        "Sheffield S9 1AB, United Kingdom"
+      ],
+      "tax_id": "GB-203456789"
+    },
+    "currency": "GBP",
+    "tolerance_percent": "1.50",
+    "status": "OPEN",
+    "issue_date": "2024-10-02",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "SE-BRG-6204",
+        "description": "Precision bearing 6204-2RS",
+        "quantity": "250",
+        "unit_price": "3.85"
+      },
+      {
+        "line_no": 2,
+        "sku": "SE-CPL-25",
+        "description": "Shaft coupling, 25 mm",
+        "quantity": "40",
+        "unit_price": "28.40"
+      },
+      {
+        "line_no": 3,
+        "sku": "SE-RAIL-600",
+        "description": "Linear guide rail 600 mm",
+        "quantity": "12",
+        "unit_price": "94.75"
+      }
+    ],
+    "total": "3235.50"
+  },
+  {
+    "po_number": "PO-2024-1007",
+    "vendor": {
+      "name": "Wayne Packaging Co",
+      "address": [
+        "2100 Gotham Avenue",
+        "Newark, NJ 07102"
+      ],
+      "tax_id": "US-22-8765432"
+    },
+    "currency": "USD",
+    "tolerance_percent": "2.00",
+    "status": "CLOSED",
+    "issue_date": "2024-08-12",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "WP-BOX-403025",
+        "description": "Corrugated box 40x30x25 cm",
+        "quantity": "2000",
+        "unit_price": "0.92"
+      },
+      {
+        "line_no": 2,
+        "sku": "WP-WRP-ST",
+        "description": "Stretch wrap roll",
+        "quantity": "120",
+        "unit_price": "7.15"
+      }
+    ],
+    "total": "2698.00"
+  },
+  {
+    "po_number": "PO-2024-1008",
+    "vendor": {
+      "name": "Hooli Cloud Services Inc",
+      "address": [
+        "1 Infinite Loop Road",
+        "San Jose, CA 95112"
+      ],
+      "tax_id": "US-94-5551212"
+    },
+    "currency": "USD",
+    "tolerance_percent": "0.50",
+    "status": "OPEN",
+    "issue_date": "2024-10-07",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "HC-CMP-RI",
+        "description": "Compute reserved instances (month)",
+        "quantity": "6",
+        "unit_price": "1850.00"
+      },
+      {
+        "line_no": 2,
+        "sku": "HC-OBJ-TB",
+        "description": "Object storage (TB-month)",
+        "quantity": "24",
+        "unit_price": "23.00"
+      },
+      {
+        "line_no": 3,
+        "sku": "HC-SUP-MO",
+        "description": "Support plan (month)",
+        "quantity": "6",
+        "unit_price": "400.00"
+      }
+    ],
+    "total": "14052.00"
+  },
+  {
+    "po_number": "PO-2024-1009",
+    "vendor": {
+      "name": "Soylent Catering Ltd",
+      "address": [
+        "45 Greenfield Lane",
+        "Manchester M1 4BT, United Kingdom"
+      ],
+      "tax_id": "GB-312987654"
+    },
+    "currency": "GBP",
+    "tolerance_percent": "5.00",
+    "status": "CLOSED",
+    "issue_date": "2024-07-22",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "SC-LNCH-HD",
+        "description": "Lunch service, per head",
+        "quantity": "420",
+        "unit_price": "9.80"
+      },
+      {
+        "line_no": 2,
+        "sku": "SC-SET-EV",
+        "description": "Event setup fee",
+        "quantity": "3",
+        "unit_price": "150.00"
+      }
+    ],
+    "total": "4566.00"
+  },
+  {
+    "po_number": "PO-2024-1010",
+    "vendor": {
+      "name": "Tyrell Laboratory Equipment Inc",
+      "address": [
+        "300 Genome Way",
+        "Boston, MA 02110"
+      ],
+      "tax_id": "US-04-7788990"
+    },
+    "currency": "USD",
+    "tolerance_percent": "2.50",
+    "status": "OPEN",
+    "issue_date": "2024-10-11",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "TL-ROT-12",
+        "description": "Centrifuge rotor, 12-place",
+        "quantity": "4",
+        "unit_price": "1240.00"
+      },
+      {
+        "line_no": 2,
+        "sku": "TL-PIP-5",
+        "description": "Pipette set, 5-piece",
+        "quantity": "15",
+        "unit_price": "318.50"
+      },
+      {
+        "line_no": 3,
+        "sku": "TL-CAL-SV",
+        "description": "Calibration service",
+        "quantity": "2",
+        "unit_price": "450.00"
+      }
+    ],
+    "total": "10637.50"
+  },
+  {
+    "po_number": "PO-2024-1011",
+    "vendor": {
+      "name": "Vandelay Import Export S.L.",
+      "address": [
+        "Calle del Comercio 22",
+        "28001 Madrid, Spain"
+      ],
+      "tax_id": "ES-B12345678"
+    },
+    "currency": "EUR",
+    "tolerance_percent": "0.00",
+    "status": "OPEN",
+    "issue_date": "2024-10-15",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "VI-OIL-5L",
+        "description": "Olive oil, 5 L tin",
+        "quantity": "300",
+        "unit_price": "21.40"
+      },
+      {
+        "line_no": 2,
+        "sku": "VI-VIN-1L",
+        "description": "Balsamic vinegar, 1 L",
+        "quantity": "200",
+        "unit_price": "8.95"
+      }
+    ],
+    "total": "8210.00"
+  },
+  {
+    "po_number": "PO-2024-1012",
+    "vendor": {
+      "name": "Massive Dynamic Research Corp",
+      "address": [
+        "77 Research Parkway",
+        "Cambridge, MA 02139"
+      ],
+      "tax_id": "US-04-1029384"
+    },
+    "currency": "USD",
+    "tolerance_percent": "10.00",
+    "status": "OPEN",
+    "issue_date": "2024-10-21",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "MD-SEQ-RUN",
+        "description": "Sequencing run",
+        "quantity": "8",
+        "unit_price": "3200.00"
+      },
+      {
+        "line_no": 2,
+        "sku": "MD-ANL-HR",
+        "description": "Data analysis (hours)",
+        "quantity": "120",
+        "unit_price": "145.00"
+      },
+      {
+        "line_no": 3,
+        "sku": "MD-KIT-SP",
+        "description": "Sample prep kit",
+        "quantity": "30",
+        "unit_price": "260.00"
+      },
+      {
+        "line_no": 4,
+        "sku": "MD-CRR-CC",
+        "description": "Courier & cold chain",
+        "quantity": "8",
+        "unit_price": "185.00"
+      }
+    ],
+    "total": "52280.00"
   }
 ]

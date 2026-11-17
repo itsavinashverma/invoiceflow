@@ -1,2 +1,1 @@
-﻿"""Placeholder: tests for schemas arrive with its implementation stage."""
-
+"""Placeholder: tests for schemas arrive with its implementation stage."""

@@ -6,6 +6,7 @@
 * every failure is mapped to a typed :class:`~invoiceflow.exceptions.AiError` with a message that
   never contains the API key.
 """
+
 from __future__ import annotations
 
 import json
@@ -13,8 +14,9 @@ import logging
 import random
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from google import genai
 from google.genai import errors as genai_errors
@@ -84,9 +86,7 @@ def classify_exception(exc: Exception, api_key: str | None = None) -> AiError:
         if code == 429:
             delay = _retry_delay_from(exc)
             hint = f" Suggested wait: ~{delay:.0f}s." if delay else ""
-            return GeminiRateLimitError(
-                f"Gemini rate limit or quota reached (free-tier limits apply).{hint}", retry_after=delay
-            )
+            return GeminiRateLimitError(f"Gemini rate limit or quota reached (free-tier limits apply).{hint}", retry_after=delay)
         if code in (401, 403) or "API key not valid" in detail or "API_KEY_INVALID" in detail:
             return GeminiAuthError(f"Gemini rejected the API key or this request is not permitted (HTTP {code}). Check GEMINI_API_KEY.")
         if code == 404:
@@ -97,7 +97,9 @@ def classify_exception(exc: Exception, api_key: str | None = None) -> AiError:
             return GeminiUnavailableError(f"Gemini returned a server error (HTTP {code}).")
         return GeminiRequestError(f"Gemini rejected the request (HTTP {code}): {detail}")
     name = type(exc).__name__
-    if any(tok in name for tok in ("Timeout", "Connect", "Network", "Read", "Remote", "Protocol")) or isinstance(exc, (TimeoutError, ConnectionError)):
+    if any(tok in name for tok in ("Timeout", "Connect", "Network", "Read", "Remote", "Protocol")) or isinstance(
+        exc, (TimeoutError, ConnectionError)
+    ):
         return GeminiUnavailableError(f"Could not reach Gemini ({name}): check the network connection or try again.")
     logger.exception("Unexpected error calling Gemini")
     return GeminiUnavailableError(f"Unexpected error while calling Gemini ({name}).")
@@ -154,7 +156,7 @@ class GeminiClient:
         )
 
     @classmethod
-    def from_settings(cls, settings: Settings, **kwargs: Any) -> "GeminiClient":
+    def from_settings(cls, settings: Settings, **kwargs: Any) -> GeminiClient:
         return cls(
             settings.gemini_api_key or "",
             settings.gemini_model,
@@ -168,12 +170,10 @@ class GeminiClient:
         """Verify the key and model with one cheap metadata call. Returns the model's resource name."""
         try:
             return str(self._client.models.get(model=self.model).name)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise classify_exception(exc, self._api_key) from None
 
-    def generate_structured(
-        self, *, system_instruction: str, contents: str, response_model: type[T]
-    ) -> StructuredResult[T]:
+    def generate_structured(self, *, system_instruction: str, contents: str, response_model: type[T]) -> StructuredResult[T]:
         """Call Gemini and return a validated ``response_model``.
 
         Retries only transient failures (rate limit, 5xx/timeout, malformed output) within
@@ -193,7 +193,7 @@ class GeminiClient:
                 raw = _candidate_text(response, self._api_key)
                 parsed = self._parse(raw, response_model)
                 return StructuredResult(parsed=parsed, raw_text=raw, model=self.model, attempts=attempt)
-            except Exception as exc:  # noqa: BLE001 - classified below
+            except Exception as exc:
                 err = classify_exception(exc, self._api_key)
                 last = err
                 logger.warning("Gemini attempt %d/%d failed: %s (%s)", attempt, self.max_attempts, err.code, err)
@@ -215,17 +215,21 @@ class GeminiClient:
         if err.retry_after is not None:
             return err.retry_after if err.retry_after <= self._max_delay else None
         delay = min(self._max_delay, self._base_delay * (2 ** (attempt - 1)))
-        return delay + random.uniform(0, delay * 0.1)
+        return delay + random.uniform(0, delay * 0.1)  # noqa: S311 - retry jitter, not a security use
 
     @staticmethod
     def _parse(raw: str, model: type[T]) -> T:
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
-            raise GeminiInvalidResponseError(f"Gemini's answer was not valid JSON ({exc.msg} at char {exc.pos}).", raw_response=raw) from None
+            raise GeminiInvalidResponseError(
+                f"Gemini's answer was not valid JSON ({exc.msg} at char {exc.pos}).", raw_response=raw
+            ) from None
         try:
             return model.model_validate(data)
         except ValidationError as exc:
             # Report where it failed, not the offending values.
             where = ", ".join(sorted({".".join(map(str, e["loc"])) or "<root>" for e in exc.errors()}))[:200]
-            raise GeminiInvalidResponseError(f"Gemini's JSON did not match the invoice schema (problem fields: {where}).", raw_response=raw) from None
+            raise GeminiInvalidResponseError(
+                f"Gemini's JSON did not match the invoice schema (problem fields: {where}).", raw_response=raw
+            ) from None

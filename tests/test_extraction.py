@@ -1,4 +1,4 @@
-﻿import hashlib
+import hashlib
 from dataclasses import replace
 
 import pymupdf

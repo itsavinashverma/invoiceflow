@@ -6,9 +6,12 @@ app keeps running and can offer manual entry. Nothing is ever invented on failur
 
 The LLM only extracts. Its output goes through the deterministic normalizer; it makes no decision.
 """
+
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
+from typing import Literal
 
 from invoiceflow import constants
 from invoiceflow.ai.gemini_client import GeminiClient, redact
@@ -30,23 +33,46 @@ def _truncate(text: str | None) -> str | None:
     return text if len(text) <= MAX_RAW_RESPONSE_CHARS else text[:MAX_RAW_RESPONSE_CHARS] + "\n[truncated]"
 
 
-def run_ai_extraction(
+@dataclass
+class AiCallResult:
+    """Raw outcome of asking a model to extract fields, BEFORE normalisation and auditing.
+
+    Produced by an :class:`~invoiceflow.ai.provider.AiProvider`. ``extraction`` is the model's output,
+    already validated against the ``InvoiceExtraction`` schema, and is ``None`` unless ``status`` is
+    ``"success"``. ``text_used`` is the (possibly truncated) document text that was sent.
+    """
+
+    provider: str
+    model: str | None
+    status: Literal["success", "unavailable", "failed"]
+    extraction: InvoiceExtraction | None = None
+    attempts: int = 0
+    raw_response: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    warnings: list[str] = field(default_factory=list)
+    text_used: str = ""
+    is_test_double: bool = False
+
+
+def call_gemini(
     document_text: str,
     settings: Settings,
     *,
     source_method: str = "text",
-    file_sha256: str | None = None,
     client: GeminiClient | None = None,
-) -> AiExtractionRecord:
-    """Extract invoice fields with Gemini. Always returns a record; see module docstring."""
+) -> AiCallResult:
+    """Ask Gemini to extract the invoice fields. Never raises for API problems; see :class:`AiCallResult`."""
     warnings: list[str] = []
     text = document_text
     if len(text) > constants.MAX_DOCUMENT_CHARS:
         text = text[: constants.MAX_DOCUMENT_CHARS]
         warnings.append(f"The document text was truncated to {constants.MAX_DOCUMENT_CHARS:,} characters before AI extraction.")
+    base = dict(provider="gemini", model=settings.gemini_model, warnings=warnings, text_used=text)
     if not text.strip():
-        return _failed("empty_document", "There is no document text to extract from.", settings, file_sha256, status="failed")
-
+        return AiCallResult(
+            status="failed", error_code="empty_document", error_message="There is no document text to extract from.", **base
+        )
     try:
         gemini = client or GeminiClient.from_settings(settings)
         result = gemini.generate_structured(
@@ -56,51 +82,63 @@ def run_ai_extraction(
         )
     except AiError as exc:
         logger.warning("AI extraction did not succeed: %s: %s", exc.code, exc)
-        return _failed(
-            exc.code, redact(str(exc), settings.gemini_api_key), settings, file_sha256,
-            status="unavailable" if exc.unavailable else "failed", raw=exc.raw_response, warnings=warnings,
+        return AiCallResult(
+            status="unavailable" if exc.unavailable else "failed",
             attempts=exc.attempts,
+            raw_response=_truncate(exc.raw_response),
+            error_code=exc.code,
+            error_message=redact(str(exc), settings.gemini_api_key),
+            **base,
         )
+    return AiCallResult(
+        status="success",
+        extraction=result.parsed,
+        attempts=result.attempts,
+        raw_response=_truncate(result.raw_text),
+        **{**base, "model": result.model},
+    )
 
-    extraction: InvoiceExtraction = result.parsed
-    normalized, norm_warnings = normalize_extraction(extraction)
-    evidence, audit_warnings = audit_against_source(extraction, normalized, text)
+
+def build_record(call: AiCallResult, file_sha256: str | None = None) -> AiExtractionRecord:
+    """Normalise and audit a model answer into an :class:`AiExtractionRecord` (or record the failure)."""
+    if call.status != "success" or call.extraction is None:
+        return AiExtractionRecord(
+            source="ai",
+            status=call.status if call.status != "success" else "failed",
+            model=call.model,
+            attempts=call.attempts,
+            file_sha256=file_sha256,
+            warnings=list(call.warnings),
+            raw_response=call.raw_response,
+            error_code=call.error_code or "no_extraction",
+            error_message=call.error_message or "The model returned no extraction.",
+        )
+    normalized, norm_warnings = normalize_extraction(call.extraction)
+    evidence, audit_warnings = audit_against_source(call.extraction, normalized, call.text_used)
     return AiExtractionRecord(
         source="ai",
         status="success",
-        model=result.model,
-        attempts=result.attempts,
+        model=call.model,
+        attempts=call.attempts,
         file_sha256=file_sha256,
-        extraction=extraction,
+        extraction=call.extraction,
         normalized=normalized,
         evidence=evidence,
-        warnings=warnings + norm_warnings + audit_warnings,
-        raw_response=_truncate(result.raw_text),
+        warnings=list(call.warnings) + norm_warnings + audit_warnings,
+        raw_response=call.raw_response,
     )
 
 
-def _failed(
-    code: str,
-    message: str,
+def run_ai_extraction(
+    document_text: str,
     settings: Settings,
-    file_sha256: str | None,
     *,
-    status: str,
-    raw: str | None = None,
-    warnings: list[str] | None = None,
-    attempts: int = 0,
+    source_method: str = "text",
+    file_sha256: str | None = None,
+    client: GeminiClient | None = None,
 ) -> AiExtractionRecord:
-    return AiExtractionRecord(
-        source="ai",
-        status=status,  # type: ignore[arg-type]
-        model=settings.gemini_model,
-        attempts=attempts,
-        file_sha256=file_sha256,
-        warnings=list(warnings or []),
-        raw_response=_truncate(raw),
-        error_code=code,
-        error_message=message,
-    )
+    """Extract invoice fields with Gemini. Always returns a record; see module docstring."""
+    return build_record(call_gemini(document_text, settings, source_method=source_method, client=client), file_sha256)
 
 
 def record_from_manual(
