@@ -1,0 +1,430 @@
+[
+  {
+    "po_number": "PO-2024-1001",
+    "vendor": {
+      "name": "Acme Industrial Supplies Ltd",
+      "address": [
+        "12 Foundry Road",
+        "Pittsburgh, PA 15201"
+      ],
+      "tax_id": "US-47-1234567"
+    },
+    "currency": "USD",
+    "issue_date": "2024-09-02",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "AC-HOS-12",
+        "description": "Hydraulic hose assembly, 12 in",
+        "quantity": "12",
+        "unit_price": "45.50"
+      },
+      {
+        "line_no": 2,
+        "sku": "AC-BRK-ST",
+        "description": "Steel mounting bracket",
+        "quantity": "40",
+        "unit_price": "8.75"
+      },
+      {
+        "line_no": 3,
+        "sku": "AC-GLV-PR",
+        "description": "Safety gloves (pair)",
+        "quantity": "100",
+        "unit_price": "3.20"
+      }
+    ],
+    "total": "1216.00"
+  },
+  {
+    "po_number": "PO-2024-1002",
+    "vendor": {
+      "name": "Northwind Office Co",
+      "address": [
+        "88 Commerce Street",
+        "Columbus, OH 43215"
+      ],
+      "tax_id": "US-31-7654321"
+    },
+    "currency": "USD",
+    "issue_date": "2024-09-09",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "NW-PAP-A4",
+        "description": "A4 copy paper, 5-ream carton",
+        "quantity": "3",
+        "unit_price": "28.40"
+      },
+      {
+        "line_no": 2,
+        "sku": "NW-PEN-BLK",
+        "description": "Ballpoint pens, black, box of 50",
+        "quantity": "10",
+        "unit_price": "11.75"
+      },
+      {
+        "line_no": 3,
+        "sku": "NW-FLD-LTR",
+        "description": "Manila file folders, box of 100",
+        "quantity": "5",
+        "unit_price": "14.20"
+      },
+      {
+        "line_no": 4,
+        "sku": "NW-STP-STD",
+        "description": "Heavy-duty stapler",
+        "quantity": "12",
+        "unit_price": "19.90"
+      },
+      {
+        "line_no": 5,
+        "sku": "NW-TNR-85A",
+        "description": "Toner cartridge 85A, black",
+        "quantity": "7",
+        "unit_price": "62.35"
+      },
+      {
+        "line_no": 6,
+        "sku": "NW-NTB-SPR",
+        "description": "Spiral notebooks, pack of 10",
+        "quantity": "14",
+        "unit_price": "16.80"
+      },
+      {
+        "line_no": 7,
+        "sku": "NW-MKR-WHT",
+        "description": "Whiteboard markers, set of 12",
+        "quantity": "9",
+        "unit_price": "9.45"
+      },
+      {
+        "line_no": 8,
+        "sku": "NW-LBL-AVY",
+        "description": "Address labels, 1000 count",
+        "quantity": "4",
+        "unit_price": "13.10"
+      },
+      {
+        "line_no": 9,
+        "sku": "NW-ENV-C5",
+        "description": "C5 envelopes, box of 500",
+        "quantity": "11",
+        "unit_price": "21.60"
+      },
+      {
+        "line_no": 10,
+        "sku": "NW-CLP-BND",
+        "description": "Binder clips, assorted, box of 144",
+        "quantity": "6",
+        "unit_price": "7.25"
+      },
+      {
+        "line_no": 11,
+        "sku": "NW-DSK-ORG",
+        "description": "Desktop organiser, mesh",
+        "quantity": "13",
+        "unit_price": "17.95"
+      },
+      {
+        "line_no": 12,
+        "sku": "NW-CAL-WLL",
+        "description": "Wall calendar, 12 month",
+        "quantity": "8",
+        "unit_price": "8.60"
+      },
+      {
+        "line_no": 13,
+        "sku": "NW-TAP-CLR",
+        "description": "Packing tape, clear, 6-roll",
+        "quantity": "3",
+        "unit_price": "12.30"
+      },
+      {
+        "line_no": 14,
+        "sku": "NW-SCS-8IN",
+        "description": "Office scissors, 8 inch",
+        "quantity": "10",
+        "unit_price": "6.40"
+      },
+      {
+        "line_no": 15,
+        "sku": "NW-HLT-YLW",
+        "description": "Highlighters, yellow, box of 12",
+        "quantity": "5",
+        "unit_price": "8.15"
+      },
+      {
+        "line_no": 16,
+        "sku": "NW-PST-3X3",
+        "description": "Sticky notes 3x3, 12 pads",
+        "quantity": "12",
+        "unit_price": "10.55"
+      },
+      {
+        "line_no": 17,
+        "sku": "NW-CBL-USB",
+        "description": "USB-C cable, 2 m",
+        "quantity": "7",
+        "unit_price": "9.99"
+      },
+      {
+        "line_no": 18,
+        "sku": "NW-MOU-WRL",
+        "description": "Wireless mouse",
+        "quantity": "14",
+        "unit_price": "18.75"
+      },
+      {
+        "line_no": 19,
+        "sku": "NW-KBD-STD",
+        "description": "Standard USB keyboard",
+        "quantity": "9",
+        "unit_price": "24.50"
+      },
+      {
+        "line_no": 20,
+        "sku": "NW-MON-ARM",
+        "description": "Monitor arm, single",
+        "quantity": "4",
+        "unit_price": "54.00"
+      },
+      {
+        "line_no": 21,
+        "sku": "NW-CHR-MAT",
+        "description": "Chair mat, 36x48 in",
+        "quantity": "11",
+        "unit_price": "46.80"
+      },
+      {
+        "line_no": 22,
+        "sku": "NW-LMP-LED",
+        "description": "LED desk lamp",
+        "quantity": "6",
+        "unit_price": "27.30"
+      },
+      {
+        "line_no": 23,
+        "sku": "NW-SHR-CRS",
+        "description": "Cross-cut shredder, 10 sheet",
+        "quantity": "13",
+        "unit_price": "89.00"
+      },
+      {
+        "line_no": 24,
+        "sku": "NW-WST-BIN",
+        "description": "Wastebasket, 28 qt",
+        "quantity": "8",
+        "unit_price": "11.20"
+      },
+      {
+        "line_no": 25,
+        "sku": "NW-FRM-A4",
+        "description": "Certificate frame, A4",
+        "quantity": "3",
+        "unit_price": "13.85"
+      },
+      {
+        "line_no": 26,
+        "sku": "NW-PNC-HOL",
+        "description": "3-hole punch, 20 sheet",
+        "quantity": "10",
+        "unit_price": "22.40"
+      },
+      {
+        "line_no": 27,
+        "sku": "NW-RUL-30C",
+        "description": "Ruler, 30 cm",
+        "quantity": "5",
+        "unit_price": "2.15"
+      },
+      {
+        "line_no": 28,
+        "sku": "NW-ERS-WHT",
+        "description": "Erasers, pack of 20",
+        "quantity": "12",
+        "unit_price": "4.30"
+      },
+      {
+        "line_no": 29,
+        "sku": "NW-GLU-STK",
+        "description": "Glue sticks, pack of 12",
+        "quantity": "7",
+        "unit_price": "6.95"
+      },
+      {
+        "line_no": 30,
+        "sku": "NW-TIE-ZIP",
+        "description": "Cable ties, 200 pack",
+        "quantity": "14",
+        "unit_price": "5.80"
+      },
+      {
+        "line_no": 31,
+        "sku": "NW-BAT-AA",
+        "description": "AA batteries, 24 pack",
+        "quantity": "9",
+        "unit_price": "15.60"
+      },
+      {
+        "line_no": 32,
+        "sku": "NW-BAT-AAA",
+        "description": "AAA batteries, 24 pack",
+        "quantity": "4",
+        "unit_price": "14.90"
+      },
+      {
+        "line_no": 33,
+        "sku": "NW-CLN-WIP",
+        "description": "Screen cleaning wipes, 100",
+        "quantity": "11",
+        "unit_price": "7.70"
+      },
+      {
+        "line_no": 34,
+        "sku": "NW-HDN-PHN",
+        "description": "Headset, USB, mono",
+        "quantity": "6",
+        "unit_price": "33.25"
+      },
+      {
+        "line_no": 35,
+        "sku": "NW-WBD-90",
+        "description": "Whiteboard 90x60 cm",
+        "quantity": "13",
+        "unit_price": "58.40"
+      },
+      {
+        "line_no": 36,
+        "sku": "NW-PIN-BRD",
+        "description": "Pin board, cork, 60x45 cm",
+        "quantity": "8",
+        "unit_price": "26.10"
+      },
+      {
+        "line_no": 37,
+        "sku": "NW-DVD-SLV",
+        "description": "Document wallets, pack of 50",
+        "quantity": "3",
+        "unit_price": "12.65"
+      },
+      {
+        "line_no": 38,
+        "sku": "NW-LTR-TRY",
+        "description": "Letter tray, 3-tier",
+        "quantity": "10",
+        "unit_price": "20.95"
+      },
+      {
+        "line_no": 39,
+        "sku": "NW-ROL-BUB",
+        "description": "Bubble wrap roll, 50 m",
+        "quantity": "5",
+        "unit_price": "31.40"
+      },
+      {
+        "line_no": 40,
+        "sku": "NW-FLS-DRV",
+        "description": "USB flash drive, 64 GB",
+        "quantity": "12",
+        "unit_price": "8.99"
+      },
+      {
+        "line_no": 41,
+        "sku": "NW-CHR-TLR",
+        "description": "Task chair, ergonomic",
+        "quantity": "7",
+        "unit_price": "149.00"
+      },
+      {
+        "line_no": 42,
+        "sku": "NW-PRT-LBL",
+        "description": "Label printer ribbon",
+        "quantity": "14",
+        "unit_price": "18.20"
+      },
+      {
+        "line_no": 43,
+        "sku": "NW-PLN-WKL",
+        "description": "Weekly planner, 2025",
+        "quantity": "9",
+        "unit_price": "10.40"
+      }
+    ],
+    "total": "8680.91"
+  },
+  {
+    "po_number": "PO-2024-1003",
+    "vendor": {
+      "name": "Globex IT Services LLC",
+      "address": [
+        "501 Technology Drive",
+        "Austin, TX 78701"
+      ],
+      "tax_id": "US-74-2468135"
+    },
+    "currency": "USD",
+    "issue_date": "2024-09-16",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "GX-CON-HR",
+        "description": "Cloud migration consulting (hours)",
+        "quantity": "80",
+        "unit_price": "125.00"
+      },
+      {
+        "line_no": 2,
+        "sku": "GX-HST-MO",
+        "description": "Managed hosting, monthly",
+        "quantity": "3",
+        "unit_price": "450.00"
+      },
+      {
+        "line_no": 3,
+        "sku": "GX-SUP-HR",
+        "description": "Premium support (hours)",
+        "quantity": "10",
+        "unit_price": "95.00"
+      }
+    ],
+    "total": "12300.00"
+  },
+  {
+    "po_number": "PO-2024-1004",
+    "vendor": {
+      "name": "Initech Facilities Management",
+      "address": [
+        "7 Harbor Plaza",
+        "Cleveland, OH 44114"
+      ],
+      "tax_id": "US-34-1357924"
+    },
+    "currency": "USD",
+    "issue_date": "2024-09-23",
+    "lines": [
+      {
+        "line_no": 1,
+        "sku": "IN-CLN-MO",
+        "description": "Office cleaning service, monthly",
+        "quantity": "1",
+        "unit_price": "2400.00"
+      },
+      {
+        "line_no": 2,
+        "sku": "IN-WIN-QT",
+        "description": "Window cleaning, quarterly visit",
+        "quantity": "1",
+        "unit_price": "680.00"
+      },
+      {
+        "line_no": 3,
+        "sku": "IN-SUP-KT",
+        "description": "Washroom consumables kit",
+        "quantity": "6",
+        "unit_price": "42.50"
+      }
+    ],
+    "total": "3335.00"
+  }
+]
