@@ -70,10 +70,13 @@ def test_search_filters(history):
         assert names(statuses=["PROCESSING_FAILED"]) == ["bad.pdf"]
         assert names(text="%") == []  # a wildcard is not "match everything"
         assert names(text="acme", statuses=["APPROVED"]) == ["std.pdf"]
-        today = date.today()
-        assert len(names(date_from=today - timedelta(days=1), date_to=today + timedelta(days=1))) == 4
-        assert names(date_from=today + timedelta(days=1)) == []
-        assert names(date_to=today - timedelta(days=1)) == []
+        # Derive the bounds from the UTC timestamps created by this fixture. Local date.today()
+        # can differ from the UTC calendar day (for example, in Asia/Kolkata just after midnight).
+        run_days = [row.started_at.astimezone(UTC).date() for row in reporting.search_runs(s)]
+        first_day, last_day = min(run_days), max(run_days)
+        assert len(names(date_from=first_day - timedelta(days=1), date_to=last_day + timedelta(days=1))) == 4
+        assert names(date_from=last_day + timedelta(days=1)) == []
+        assert names(date_to=first_day - timedelta(days=1)) == []
         assert len(reporting.search_runs(s, limit=2)) == 2 and len(reporting.search_runs(s, limit=2, offset=3)) == 1
 
 

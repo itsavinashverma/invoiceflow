@@ -1,57 +1,30 @@
-# IMPLEMENTATION_PLAN.md
+# InvoiceFlow implementation plan
 
-Each stage ends with: tests run and passing, files-changed report, no unverified claims.
+This plan reflects the existing implementation as audited on 2026-11-19. See [CODEX_HANDOVER.md](CODEX_HANDOVER.md) for architecture and evidence. No application code was changed in the initial audit.
 
-## Stage 0 — Environment (needs user approval for installs)
-- Create Python 3.12 venv via `uv`; install Tesseract via winget; create `.env` from `.env.example`.
-- **Accept**: `python --version` = 3.12.x; `tesseract --version` works; imports of all libs succeed.
+## P0 — Complete: restore a reliable offline test run
 
-## Stage 1 — Scaffold
-- `pyproject`/`requirements.txt`, `.gitignore` (`.env`, `*.db`, `.venv`), `.env.example`, package layout, `config.py`, logging, `.streamlit/config.toml`.
-- **Accept**: `pytest` collects; config loads with and without `.env`; no secrets tracked.
+- Fixed the UTC/local date mismatch in `tests/test_reporting.py::test_search_filters` by deriving bounds from fixture run timestamps.
+- Confirmed that the Processing History UI labels its date filters as UTC.
+- Verification: reporting tests **9 passed**; full offline suite **496 passed, 1 deselected**.
 
-## Stage 2 — Models & DB
-- Pydantic models (Invoice, LineItem, PO, CheckResult, Decision, RunRecord); SQLAlchemy tables (vendors, purchase_orders, po_lines, invoices_processed, runs, run_events).
-- **Accept**: CRUD tests on SQLite in-memory; Decimal round-trips exactly; Postgres URL accepted by engine factory.
+## P1 — Verify external integrations before presenting a live demo
 
-## Stage 3 — Synthetic data
-- ReportLab generator: POs seed + PDFs: happy path, amount mismatch, duplicate, scanned image-only PDF, missing-PO.
-- **Accept**: PDFs open in PyMuPDF; scanned PDF has no text layer; seed loads into DB.
+- Gemini extraction was attempted with the synthetic standard invoice. The configured provider returned HTTP 504 after three attempts; rerun when the service is available.
+- Deployment guide uses the current `main` branch. No hosted app URL is present in the repository, so deployed persistence still needs a target URL.
+- Verify persistence and the sample edge cases on the hosted app once its URL is available.
 
-## Stage 4 — Extraction
-- PyMuPDF text; OCR fallback with threshold and confidence; honest "OCR unavailable" path.
-- **Accept**: digital PDF → method `text`; scanned → method `ocr` with text containing the invoice number; corrupt/empty/password PDF handled with clear errors.
+## P2 — Improve integration confidence
 
-## Stage 5 — Gemini integration
-- List models, verify configured model; structured output with schema; response checks (blocked, empty, invalid JSON → bounded retry → failure); 429 handling.
-- **Accept**: unit tests with a faked client for each failure mode; **live** test (opt-in marker) against real API returns a valid `Invoice` for a synthetic PDF.
+- Added `tests/test_postgres_integration.py` for migration/schema, money/UTC round trips, and concurrent duplicate processing. It passed against isolated schemas in the configured PostgreSQL database.
+- Added `.github/workflows/tests.yml` with a disposable PostgreSQL 16 service. The hosted GitHub workflow has not yet run.
+- Repeat a visual browser check at desktop and phone widths before a release; no browser surface was available during this audit.
+- Keep `PROJECT_SPEC.md`, `README.md`, and this plan aligned with the implemented behavior and known limitations.
 
-## Stage 6 — Matching, validation, duplicates, decision
-- Pure functions, Decimal math, rule IDs, reason codes.
-- **Accept**: table-driven tests for each rule and boundary (tolerance edges); LLM output can never set the decision (test asserts decision depends only on checks).
+## P3 — Optional enhancements
 
-## Stage 7 — Pipeline orchestrator
-- Stages emit events (`started/succeeded/failed`, duration, detail); every run persisted, including failures.
-- **Accept**: end-to-end test on all five synthetic invoices yields expected decisions (live Gemini test opt-in; fake-LLM test default).
+- Consider extra monitoring or operational reporting only if the live demonstration needs it. Do not add fuzzy duplicate matching or external accounting actions without a demonstrated requirement; the current conservative deterministic workflow is the intended scope.
 
-## Stage 8 — Streamlit UI
-- Pages: Process (upload + live stage view), Dashboard, Run history/detail, Data (POs). Sample-invoice quick buttons.
-- **Accept**: app starts headless; run through the browser (or Streamlit `AppTest`) for upload → live stages → result; screenshots of edge cases.
+## Completed implementation
 
-## Stage 9 — Hardening
-- Review for secrets, error paths, large/odd PDFs, rate limits; `/code-review` pass; fix findings.
-- **Accept**: full test suite green; manual checklist of the four edge cases verified.
-
-## Stage 10 — Docs & deployment config
-- README (setup, architecture diagram, decision policy, limitations), `requirements.txt` pinned, `packages.txt` (`tesseract-ocr`) for Streamlit Cloud, secrets template, Supabase setup steps.
-- **Accept**: fresh clone + README steps reproduce a working app locally.
-
-## Stage 11 — Publish (only on explicit approval)
-- `git init`, first commit, GitHub repo creation/push, Supabase project, Streamlit Cloud deploy.
-- **Accept**: public URL processes a synthetic invoice and persists to Supabase; no secrets in repo history.
-
-## Open decisions for the user
-1. OK to install Python 3.12 (via uv) and Tesseract (via winget)?
-2. Provide a Gemini API key (Google AI Studio free tier) in `.env`.
-3. Git identity: keep `itsavinashverma` / `avinashverma70543@gmail.com`, or use another?
-4. Proceed to Stage 0–1 when ready.
+The existing repository already includes PDF validation and extraction, real Tesseract OCR, Gemini structured extraction, Pydantic validation, normalization, duplicate detection, PO matching, Decimal-based financial checks, deterministic decisions, persistence, stage events, Streamlit dashboard/history/process pages, synthetic edge cases, and deployment configuration. These features and their test evidence are summarized in [CODEX_HANDOVER.md](CODEX_HANDOVER.md).

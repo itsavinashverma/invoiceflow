@@ -52,7 +52,7 @@ Each finding below was checked by running something, not by reading code alone. 
 - The LLM only extracts. The decision is made by pure Python rules, with precedence `PROCESSING_FAILED > DUPLICATE_BLOCKED > REVIEW_REQUIRED > APPROVED`, and a last-line guard that refuses to return `APPROVED` unless an open PO, an invoice number and a total exist and every check passed.
 - No UI element can approve, reject or pay (tested: no such button on any page). The one repository function that could change a status, `update_invoice_decision`, is called by nothing and is documented as unsafe to expose without authentication.
 - **Executed evidence:** scenario tests plus fault injection at every pipeline stage, with history-wide invariants re-checked after each (no `APPROVED` without a fully successful run; no PO overspend; no invoice approved twice; no run left hanging). Mutation testing (deliberately breaking five rules) was caught every time.
-- Concurrency: a database lock serialises decisions, so two simultaneous uploads cannot both be approved against one balance or as the same invoice.
+- Concurrency: a database lock serialises decisions. SQLite and PostgreSQL integration tests cover two simultaneous uploads; the PostgreSQL case ran against a temporary schema in the configured database and confirmed one approval plus one duplicate block. GitHub Actions now has a disposable PostgreSQL 16 service for this test; that hosted workflow has not yet run.
 
 ### 6. Publicly exposed sensitive information
 - A public URL means anyone can open the app, see **all** stored runs (shared demo data) and make Gemini calls with **your** quota.

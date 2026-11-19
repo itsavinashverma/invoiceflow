@@ -190,12 +190,14 @@ intermittently overloaded (HTTP 503); try another model via `GEMINI_MODEL`.
 ```powershell
 python -m pytest -q                      # 496 offline tests; no real Gemini call is ever made
 python -m pytest -q -m live              # opt-in: one real Gemini call (needs GEMINI_API_KEY)
+python -m pytest -m postgres -q           # opt-in: requires INVOICEFLOW_TEST_POSTGRES_URL
 ruff check . ; ruff format --check .     # lint and formatting
 ```
 
 - The AI is a test double in every automated test (`tests/fakes.py`, labelled `TEST-DOUBLE`, refused outside pytest). Test documents are synthetic.
 - OCR tests run the real Tesseract path when installed and are **skipped with a reason** when it is not.
 - `tests/test_scenarios.py` runs the demonstration scenarios and technical failure cases end to end, with fault injection at every pipeline stage, and re-checks history-wide invariants after each one.
+- `tests/test_postgres_integration.py` runs migrations, money/UTC round trips, and concurrent duplicate processing against a temporary schema. `.github/workflows/tests.yml` supplies a disposable PostgreSQL 16 service in CI.
 - `tests/test_deployment.py` checks configuration sources, the access gate, repository hygiene (no secrets, no oversized files) and the Streamlit Cloud files.
 
 ## Deployment

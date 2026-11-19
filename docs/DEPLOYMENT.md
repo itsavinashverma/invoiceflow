@@ -63,10 +63,10 @@ git status --short                    # review every file that will be committed
 git add -A
 git status --short | Select-String "\.env$|secrets\.toml$"   # must print NOTHING (these are git-ignored)
 git commit -m "Prepare InvoiceFlow for deployment"
-git push -u origin master             # your current branch is "master"; use the branch name you want to deploy
+git push -u origin main               # current repository branch; substitute your chosen branch if it differs
 ```
 
-If you prefer `main`: `git branch -M main` then `git push -u origin main`. In step 5 select whichever branch you pushed.
+In step 5 select the branch you pushed.
 After pushing, open the repository on GitHub and confirm there is **no** `.env`, no `secrets.toml` and no `*.db` file.
 
 ## 4. Open Streamlit Community Cloud and connect GitHub
